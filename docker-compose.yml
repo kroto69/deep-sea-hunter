@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: deepfish
+      POSTGRES_USER: deepfish
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deepfish-local-only}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - deepfish-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deepfish -d deepfish"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: development
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      DATABASE_URL: postgres://deepfish:${POSTGRES_PASSWORD:-deepfish-local-only}@postgres:5432/deepfish
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
+      MERCHANT_INITIAL_TREASURY: ${MERCHANT_INITIAL_TREASURY:-10000}
+      POPULATION_TICK_SECONDS: ${POPULATION_TICK_SECONDS:-60}
+      MARKET_TICK_SECONDS: ${MARKET_TICK_SECONDS:-60}
+      CATCH_SESSION_TTL_SECONDS: ${CATCH_SESSION_TTL_SECONDS:-300}
+      CATCH_MAX_SHOTS: ${CATCH_MAX_SHOTS:-30}
+      NEAR_NETWORK: testnet
+      NEAR_RPC_URL: ${NEAR_RPC_URL:-https://rpc.testnet.near.org}
+      NEAR_CONTRACT_ID: ${NEAR_CONTRACT_ID:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  deepfish-postgres:

@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><title>Living world checks</title>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<pre id="result">Running…</pre>
+<script type="module">
+import { EventManager } from '../js/events.js';
+import { Progression } from '../js/progression.js';
+import { FishSystem } from '../js/fish.js';
+import { createOcean } from '../js/ocean.js';
+import * as THREE from 'three';
+const assert = (ok, message) => { if (!ok) throw Error(message); };
+try {
+ const scene = new THREE.Scene(); scene.background = new THREE.Color(); scene.fog = new THREE.FogExp2();
+ const sun = new THREE.DirectionalLight(); let current;
+ const ocean = createOcean({scene, sun, environment: {setCurrent(v) {current = v.clone();}}});
+ ocean.update(1, 0, 0); const shallow = scene.fog.density;
+ ocean.update(1, 20, 33); assert(scene.fog.density > shallow, 'Depth fog'); assert(current.length() > 0, 'Current');
+ const camera = new THREE.PerspectiveCamera(); camera.position.set(40,20,40);
+ const player = {camera, velocity: new THREE.Vector3()};
+ const fish = new FishSystem(scene, player, {terrainHeight: () => 0, habitats: []}, {quality:'low'});
+ assert(fish.predators.length >= 2 && new Set(fish.predators.map(f => f.spec.id)).size >= 2, 'Predators registered after spawn');
+ const prey = fish.fish.find(f => !f.spec.predator); const predator = fish.predators[0];
+ prey.fish.position.set(0,10,0); predator.fish.position.set(2,10,0);
+ fish.update(.1); assert(prey.state === 'FLEEING', 'Prey flees predator');
+ fish.scareNearby(prey.fish.position.clone(), 4); assert(prey.fleeBurst > 0, 'Impact panic');
+ let disposed = 0, now = 0;
+ const events = new EventManager({depth:()=>10,zone:()=> 'reef',time:()=>now});
+ events.register({id:'test',duration:1,cooldown:10,spawn:()=>({dispose(){disposed++;}})});
+ assert(events.force('test'), 'Event starts'); assert(!events.force('test'), 'Single event cap');
+ events.update(1, 1); assert(disposed === 1 && !events.active, 'Event ends');
+ assert(!events.force('test'), 'Cooldown enforced');
+ const progression = new Progression(); progression.save = () => {};
+ progression.data.cash = 200; progression.data.upgrades.oxygen = 0;
+ assert(progression.buyUpgrade('oxygen'), 'Upgrade purchase'); assert(progression.cash === 80 && progression.oxygenCapacity() === 125, 'Upgrade applied');
+ assert(!progression.spend(-1), 'Reject negative spend');
+ document.getElementById('result').textContent = 'PASS: ocean, predators, impact panic, event cap/cooldown/disposal, upgrades, spending validation';
+} catch (error) { document.getElementById('result').textContent = 'FAIL: ' + error.stack; throw error; }
+</script>

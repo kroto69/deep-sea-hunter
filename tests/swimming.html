@@ -1,0 +1,66 @@
+<!doctype html><meta charset="utf-8"><title>Swimming checks</title>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<canvas id="game"></canvas><div id="mobile-ui" class="hidden"><div id="joystick-zone"><div id="joystick-base" style="width:120px;height:120px"><div id="joystick-knob"></div></div></div><div id="look-zone"></div></div>
+<pre id="result">Running</pre>
+<script type="module">
+import * as THREE from 'three';
+import {Player} from '../js/player.js';
+import {Input} from '../js/input.js';
+const assert = (ok,m) => {if(!ok) throw Error(m);};
+try {
+ for(const id of ['up','down','boost','fire','aim','act','light','scan','photo']) { const b=document.createElement('button'); b.id='btn-'+id; document.body.append(b); }
+ const camera=new THREE.PerspectiveCamera(), player=new Player(camera);
+ const input=new Input(player,{onAim(){},onFire(){},onPause(){},onInteract(){}});
+ const reset=()=>{input.reset(); camera.position.set(0,20,0);player.velocity.set(0,0,0);player.currentSpeed=8;};
+ const step=(seconds,hz=60)=>{for(let i=0;i<Math.round(seconds*hz);i++){input.update();player.update(1/hz);}};
+ const key=(code,down)=>window.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',{code}));
+ input.isTouch=false;
+ for(const [code,axis,sign] of [['KeyW','z',-1],['KeyS','z',1],['KeyA','x',-1],['KeyD','x',1],['Space','y',1],['ControlLeft','y',-1]]) {
+  reset(); key(code,true);step(.1);const first=player.velocity[axis]*sign;
+  assert(first>1 && first<4,'Responsive acceleration '+code);
+  step(.4);const held=player.velocity[axis]*sign;assert(held>first && held<8,'Smooth ramp '+code);
+  key(code,false);step(.1);assert(player.velocity[axis]*sign>1 && player.velocity[axis]*sign<held,'Coasting '+code);
+  step(2);assert(player.velocity.length()<.05,'Resistance stops drift');
+ }
+ reset();key('Space',true);step(.5);const vertical=player.velocity.y;
+ reset();key('Space',true);key('KeyW',true);key('KeyD',true);step(.5);
+ assert(Math.abs(player.velocity.y-vertical)<1e-8,'Independent vertical thrust');
+ assert(player.velocity.x>0 && player.velocity.z<0 && Math.hypot(player.velocity.x,player.velocity.z)<8,'Diagonal capped horizontally');
+ reset();key('KeyW',true);step(.5);const cruise=player.velocity.length();key('ShiftLeft',true);step(1/60);
+ assert(player.velocity.length()-cruise<.4,'Smooth boost');step(1);assert(player.velocity.length()>12,'Boost reaches speed');
+ // Aim-directed forward/backward; UP/DOWN still works without forward input.
+ for (const pitch of [-Math.PI/4, Math.PI/4]) {
+  reset();player.pitch=player.viewPitch=pitch;key('KeyW',true);step(.3);
+  assert(player.velocity.y*pitch>0 && player.velocity.z<0,'Forward follows aim pitch');
+  reset();key('KeyS',true);step(.3);
+  assert(player.velocity.y*pitch<0 && player.velocity.z>0,'Backward reverses aim direction');
+ }
+ player.pitch=player.viewPitch=0;
+ reset();player.yaw=player.viewYaw=0;player.pitch=player.viewPitch=0;
+ key('KeyW',true);key('ShiftLeft',true);step(1/60);
+ const stable=camera.quaternion.clone();
+ for(let i=0;i<120;i++){
+  player.addShake(1);step(1/60);
+  assert(1-Math.abs(stable.dot(camera.quaternion))<1e-12 && camera.rotation.z===0,'No bob, roll or shake while swimming/boosting');
+ }
+ const travel=hz=>{reset();key('KeyW',true);step(1,hz);return camera.position.z;};
+ assert(Math.abs(travel(30)-travel(120))<1e-8,'Frame-rate independent displacement');
+ reset();player.rotate(300,50);const before=camera.quaternion.clone();step(1/60);
+ assert(player.viewYaw<0 && player.viewYaw>player.yaw,'Smoothed look');assert(before.angleTo(camera.quaternion)<.3,'No camera snap');step(1);
+ assert(Math.abs(player.viewYaw-player.yaw)<1e-6 && Math.abs(camera.rotation.z)<.03,'Turn settles');
+ reset();camera.position.y=35.99;key('Space',true);step(.2);assert(camera.position.y===36 && player.velocity.y===0,'Surface stops velocity');
+ reset();camera.position.y=1.21;key('ControlLeft',true);step(.2);assert(camera.position.y===1.2 && player.velocity.y===0,'Floor stops velocity');
+ reset();key('KeyW',true);window.dispatchEvent(new Event('blur'));assert(player.moveInput.length()===0,'Blur clears input');
+ if(input.isTouch || navigator.maxTouchPoints>0){
+  input.isTouch=true;reset();
+  const pointer=(id,type,pointerId,x=0,y=0)=>document.getElementById(id).dispatchEvent(new PointerEvent(type,{pointerId,clientX:x,clientY:y,bubbles:true}));
+  const r=document.getElementById('joystick-base').getBoundingClientRect();
+  pointer('joystick-zone','pointerdown',1,r.x+60,r.y);pointer('btn-up','pointerdown',2);pointer('look-zone','pointerdown',3,200,100);pointer('look-zone','pointermove',3,210,105);step(.2);
+  assert(player.velocity.y>0 && player.moveInput.y>0,'Joystick + UP + look simultaneous');
+  pointer('btn-up','pointerdown',4);pointer('btn-up','pointerup',2);input.update();assert(player.verticalInput===1,'Second finger retains hold');
+  pointer('btn-up','pointercancel',4);pointer('btn-down','pointerdown',5);step(.5);assert(player.velocity.y<0 && player.moveInput.y>0,'DOWN independent');
+  pointer('btn-down','lostpointercapture',5);pointer('joystick-zone','pointercancel',1);pointer('look-zone','pointercancel',3);input.update();assert(player.verticalInput===0 && player.moveInput.length()===0,'Cancellation clears holds');
+ }
+ document.querySelector('pre').textContent='PASS: six directions, acceleration/coasting, independent vertical/diagonal, boost, frame rate, camera smoothing, bounds, blur; touch checks when touch enabled';
+}catch(e){document.querySelector('pre').textContent='FAIL: '+e.stack;throw e;}
+</script>

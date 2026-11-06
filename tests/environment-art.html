@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>Environment art checks</title>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<pre id="result">Running</pre><script type="module">
+import * as THREE from 'three';
+import { createTerrain } from '../js/world/terrain.js';
+import { createReef } from '../js/world/reef.js';
+import { mulberry32 } from '../js/world/noise.js';
+import { limestoneGeometry, scallopGeometry } from '../js/world/environment-art.js';
+import {CORAL_VARIANTS, coralGeometry} from '../js/world/coral-art.js';
+const assert = (ok, msg) => { if (!ok) throw Error(msg); };
+try {
+ assert(CORAL_VARIANTS.length >= 25 && new Set(CORAL_VARIANTS.map(v=>v.id)).size === 27, 'Distinct coral IDs');
+ for (const variant of CORAL_VARIANTS) {
+  const geo = coralGeometry(variant);
+  assert([...geo.attributes.position.array].every(Number.isFinite), 'Finite coral geometry');
+  assert(geo.attributes.position.count < 6000, 'Coral mesh budget');
+  geo.dispose();
+ }
+ for (const build of [limestoneGeometry, scallopGeometry]) {
+  const geo = build();
+  assert(geo.attributes.position.count <= 216, 'Prop triangle budget');
+  assert([...geo.attributes.position.array].every(Number.isFinite), 'Finite geometry');
+  geo.dispose();
+ }
+ for (const quality of ['low','medium','high']) {
+  const terrain = createTerrain(quality), group = new THREE.Group();
+  const reef = createReef({terrain, group, quality, rand:mulberry32(123)});
+  assert(Math.abs(terrain.heightAt(-45,-45) - 21.3) < .1, 'Height contract');
+  assert(terrain.zoneAt(48,-42).id === 'coral', 'Habitat contract');
+  assert(reef.caveSites.length === 3 && Object.keys(reef.coralMeshes).length === 8, 'Assets retained');
+  assert(reef.grottos.length === 2 && reef.grottos.every(g => Number.isFinite(g.y) && g.radius > 4), 'Explorable grottos');
+  assert(group.children.filter(m => m.isInstancedMesh).length >= 20, 'Instance/draw budget');
+  let tris = 0;
+  group.traverse(o => { if (o.isMesh) { const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); } });
+  assert(tris < (quality === 'high' ? 130000 : quality === 'medium' ? 80000 : 40000), 'World triangle budget');
+  for (const m of group.children) assert([...m.geometry.attributes.position.array].every(Number.isFinite), 'Finite world');
+  reef.dispose(); terrain.dispose();
+ }
+ document.querySelector('pre').textContent = 'PASS: geometry, triangle budgets, terrain heights, habitats, caves, grottos, coral families, disposal across all quality presets';
+} catch(e) { document.querySelector('pre').textContent = 'FAIL: '+e.stack; throw e; }
+</script>

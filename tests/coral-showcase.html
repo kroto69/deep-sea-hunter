@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><title>27 coral variants</title><style>body{margin:0;background:#153d50;color:white;font:14px sans-serif}#labels{position:absolute;top:8px;left:12px;pointer-events:none}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script><div id="labels">27 coral variants · 9 families × 3 forms · drag to orbit</div>
+<script type="module">
+import * as THREE from 'three';import {CORAL_VARIANTS,coralGeometry} from '../js/world/coral-art.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x153d50);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));document.body.append(renderer.domElement);
+const camera=new THREE.PerspectiveCamera(45,1,.1,100);camera.position.set(0,19,21);camera.lookAt(0,0,0);
+scene.add(new THREE.HemisphereLight(0xd3f9ed,0x576a79,2));const sun=new THREE.DirectionalLight(0xffe7c8,2);sun.position.set(-5,14,7);scene.add(sun);
+const mat=new THREE.MeshStandardMaterial({vertexColors:true,flatShading:true,roughness:.9});
+CORAL_VARIANTS.forEach((v,i)=>{const mesh=new THREE.Mesh(coralGeometry(v),mat);mesh.position.set((i%9-4)*3,0,(Math.floor(i/9)-1)*4);scene.add(mesh);});
+const resize=()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();};resize();addEventListener('resize',resize);
+let angle=0,drag=false;renderer.domElement.onpointerdown=e=>{drag=true;renderer.domElement.setPointerCapture(e.pointerId);};renderer.domElement.onpointerup=()=>drag=false;renderer.domElement.onpointermove=e=>{if(drag){angle+=e.movementX*.005;camera.position.set(Math.sin(angle)*21,19,Math.cos(angle)*21);camera.lookAt(0,0,0);}};
+renderer.setAnimationLoop(()=>renderer.render(scene,camera));
+</script>

@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>Rope checks</title>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script><div id="crosshair"></div><pre>Running</pre>
+<script type="module">
+import * as THREE from 'three';import {Speargun} from '../js/speargun.js';
+const assert=(v,m)=>{if(!v)throw Error(m);};
+try{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();scene.add(camera);camera.position.y=20;
+ let hit=false,caught=0;const fish={hitSegment:()=>hit?{}:null,collect(){caught++;}};
+ const gun=new Speargun(camera,scene,fish,{terrainHeight:()=>-100});
+ const buffer=gun.rope.geometry.attributes.position.array;
+ const frame=()=>{gun.update(1/60);if(!gun.spear)return;
+  const p=gun.rope.geometry.attributes.position;
+  const start=new THREE.Vector3().fromBufferAttribute(p,0),end=new THREE.Vector3().fromBufferAttribute(p,16);
+  assert(start.distanceTo(gun.muzzle)<.0001,'Gun endpoint');assert(end.distanceTo(gun.spear.mesh.position)<.0001,'Spear endpoint');
+  assert(start.distanceTo(end)<=70.001,'Bounded tether');assert(buffer===p.array,'Buffer reused');};
+ const steps=n=>{for(let i=0;i<n;i++)frame();};
+ assert(gun.fire()&&!gun.fire(),'One active projectile');steps(20);hit=true;frame();
+ assert(caught===1&&gun.spear.state==='returning'&&gun.rope.visible,'Capture keeps tether');hit=false;
+ steps(300);assert(!gun.spear&&!gun.rope.visible&&gun.rope.geometry.drawRange.count===0,'Retrieval cleanup');
+ gun.cooldown=0;gun.fire();steps(110);assert(gun.spear.state==='returning','Maximum range retrieval');
+ camera.position.x+=5;frame();steps(300);assert(!gun.spear,'Return follows moving player');
+ gun.cooldown=0;gun.fire();gun.terrainHeight=()=>100;frame();assert(gun.spear.state==='returning','Terrain impact');
+ gun.reset();assert(!gun.spear&&!gun.rope.visible,'Reset cleanup');gun.dispose();
+ document.querySelector('pre').textContent='PASS: endpoint tracking, fixed buffer, max tether, capture, moving-player retrieval, terrain, reset/disposal';
+}catch(e){document.querySelector('pre').textContent='FAIL: '+e.stack;throw e;}
+</script>

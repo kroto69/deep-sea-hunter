@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="deepfish-api" content="http://127.0.0.1:3000">
+<title>Deep Sea Hunter</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="hud-top-left" aria-label="Dive status">
+    <div class="bar-label">OXYGEN <strong id="oxygen-value">100%</strong></div>
+    <div class="bar-track"><div id="oxygen-bar" class="bar-fill"></div></div>
+    <div class="bar-label">DEPTH <strong><span id="depth-value">0</span>m</strong></div>
+  </div>
+  <div id="hud-top-right" aria-label="Dive resources">
+    <div id="fish-count">FISH <strong>0</strong></div>
+    <div id="weapon-status">SPEARGUN <strong>READY</strong></div>
+    <div id="cash-value">0 <small>CR</small></div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="notice" class="hidden"></div>
+  <div id="interact-hint" class="hidden">[E] SURFACE</div>
+  <div id="oxygen-warning" class="hidden">LOW OXYGEN!</div>
+  <div id="vignette"></div>
+</div>
+<button id="wallet-toggle" type="button" aria-label="Open wallet login">WALLET</button>
+
+<div id="wallet-login" class="hidden" role="region" aria-label="Wallet login">
+  <div id="wallet-login-panel">
+    <h2>DEEP SEA HUNTER</h2>
+    <p id="wallet-state" role="status">Checking Testnet wallet…</p>
+    <p id="wallet-account-id"></p>
+    <p id="wallet-session"></p>
+    <p id="wallet-error" role="alert"></p>
+    <div id="wallet-choices">
+      <button id="wallet-connect" type="button">Connect Wallet</button>
+      <button id="wallet-disconnect" type="button" class="hidden">Disconnect</button>
+      <button id="wallet-guest" type="button">Continue as Guest</button>
+      <button id="wallet-close" type="button">Close</button>
+    </div>
+  </div>
+</div>
+<div id="wallet-pick" class="hidden" role="dialog" aria-modal="true" aria-label="Choose NEAR Testnet wallet">
+  <div id="wallet-pick-panel">
+    <p>Choose NEAR Testnet wallet</p>
+    <div id="wallet-providers"></div>
+    <button id="wallet-pick-back" type="button">Back</button>
+  </div>
+</div>
+
+<div id="mobile-ui" class="hidden">
+  <div id="joystick-zone">
+    <div id="joystick-base">
+      <div id="joystick-knob"></div>
+    </div>
+  </div>
+  <div id="look-zone"></div>
+  <div id="buttons">
+    <button class="mbtn" id="btn-up">UP</button>
+    <button class="mbtn" id="btn-down">DN</button>
+    <button class="mbtn" id="btn-boost">BST</button>
+    <button class="mbtn" id="btn-aim">AIM</button>
+    <button class="mbtn" id="btn-fire">FIRE</button>
+  </div>
+  <div id="buttons-secondary">
+    <button class="mbtn small" id="btn-act" aria-label="Interact">ACT</button>
+    <button class="mbtn small" id="btn-light" aria-label="Toggle flashlight">LGT</button>
+    <button class="mbtn small" id="btn-scan" aria-label="Sonar scan">SON</button>
+    <button class="mbtn small" id="btn-photo" aria-label="Photograph animal">CAM</button>
+  </div>
+</div>
+
+<div id="photo-flash"></div>
+
+<div id="hub" class="hidden" role="dialog" aria-modal="true" aria-label="Dive boat hub">
+  <div id="hub-panel">
+    <div id="hub-head">
+      <div class="hub-title"><span>OPERATIONS / DECK 01</span><h2>BOAT HUB</h2></div>
+      <div class="hub-identity"><span id="hub-mode">OFFLINE GUEST</span><span id="hub-account"></span></div>
+      <div class="hub-balance"><span>BALANCE</span><strong id="hub-cash">0 CR</strong></div>
+      <button id="hub-wallet" type="button">CONNECT WALLET</button>
+      <button id="hub-close" type="button" aria-label="Close Boat Hub" title="Close Boat Hub">×</button>
+    </div>
+    <div id="hub-tabs">
+      <button data-tab="online">OVERVIEW</button>
+      <button data-tab="market" class="active">FISH MARKET</button>
+      <button data-tab="equipment">EQUIPMENT</button>
+      <button data-tab="missions">MISSIONS</button>
+      <button data-tab="zones">DIVE ZONES</button>
+      <button data-tab="records">RECORDS</button>
+    </div>
+    <div id="hub-secondary">
+      <button data-tab="workshop">WORKSHOP</button>
+      <button data-tab="storage">STORAGE</button>
+      <button data-tab="collectibles">COLLECTIBLES</button>
+      <span id="hub-scope">OFFLINE SAVE</span>
+    </div>
+    <div id="hub-body"></div>
+  </div>
+</div>
+
+<div id="pause-overlay" class="hidden" role="dialog" aria-modal="true" aria-label="Paused">
+  <div class="pause-box">
+    <h2>PAUSED</h2>
+    <p>Press ESC or tap to resume</p>
+    <button id="pause-tutorial" type="button">HOW TO PLAY</button>
+    <button id="pause-hub" type="button">BOAT HUB</button>
+  </div>
+</div>
+
+<div id="welcome" class="hidden" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+  <div class="welcome-card">
+    <div class="welcome-scene" aria-hidden="true"><span class="welcome-ray"></span><span class="welcome-fish fish-one"></span><span class="welcome-fish fish-two"></span><span class="welcome-fish fish-three"></span><span class="welcome-coral"></span><span class="welcome-kelp"></span></div>
+    <div class="welcome-copy"><span class="welcome-kicker">A LOW-POLY UNDERWATER EXPEDITION</span><h1 id="welcome-title">DEEP SEA<br>HUNTER</h1><p>Explore the ocean. Hunt responsibly. Build your legacy.</p><p id="welcome-account" class="welcome-account"></p>
+      <div class="welcome-actions"><button id="welcome-guest" type="button">CONTINUE AS GUEST</button><button id="welcome-google" type="button" disabled aria-describedby="google-status">CONTINUE WITH GOOGLE</button><small id="google-status">Google sign-in is not configured yet</small><button id="welcome-near" type="button">CONNECT NEAR WALLET</button><button id="welcome-continue" class="hidden" type="button">CONTINUE DIVING</button><button id="welcome-tutorial" class="welcome-subtle" type="button">HOW TO PLAY</button></div>
+      <button id="welcome-logout" class="hidden welcome-subtle" type="button">DISCONNECT WALLET</button>
+    </div>
+  </div>
+</div>
+
+<div id="tutorial" class="hidden" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+  <div class="tutorial-card"><div class="tutorial-heading"><span>FIELD GUIDE / <b id="tutorial-step-count">01 / 05</b></span><button id="tutorial-close" type="button" aria-label="Close tutorial">×</button></div>
+    <div class="tutorial-progress" aria-label="Tutorial progress"><i id="tutorial-progress-fill"></i></div><div class="tutorial-content"><span id="tutorial-icon" aria-hidden="true">◈</span><div><h2 id="tutorial-title"></h2><p id="tutorial-description"></p><div id="tutorial-controls"></div></div></div>
+    <div class="tutorial-footer"><button id="tutorial-skip" class="welcome-subtle" type="button">SKIP TUTORIAL</button><div><button id="tutorial-prev" type="button">PREVIOUS</button><button id="tutorial-next" type="button">NEXT</button><button id="tutorial-finish" class="hidden" type="button">FINISH DIVING</button></div></div>
+  </div>
+</div>
+
+<div id="gameover-overlay" class="hidden">
+  <div class="pause-box">
+    <h2>OUT OF OXYGEN</h2>
+    <p>Fish collected: <span id="go-fish">0</span></p>
+    <button id="restart-btn">DIVE AGAIN</button>
+  </div>
+</div>
+
+<div id="rotate-hint">Rotate device to landscape</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

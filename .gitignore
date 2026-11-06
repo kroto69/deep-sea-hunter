@@ -1,0 +1,44 @@
+# Dependencies and generated builds
+node_modules/
+contracts/collectibles/target/
+dist/
+build/
+coverage/
+.cache/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+.near-credentials/
+
+# Logs, temporary files, and local databases
+*.log
+npm-debug.log*
+*.tmp
+*.temp
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+
+# Local saves and browser/test artifacts
+*.save
+*.save.*
+playwright-report/
+test-results/
+
+# Local project reports
+phase-0-repository-report.md
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

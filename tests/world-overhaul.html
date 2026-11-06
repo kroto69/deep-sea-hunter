@@ -1,0 +1,64 @@
+<!doctype html><meta charset="utf-8"><title>World overhaul checks</title>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<pre id="result">Running</pre><script type="module">
+import * as THREE from 'three';
+import { createTerrain, HABITATS } from '../js/world/terrain.js';
+import { createReef } from '../js/world/reef.js';
+import { createVegetation } from '../js/world/vegetation.js';
+import { mulberry32 } from '../js/world/noise.js';
+import { FISH_SPECIES } from '../js/fish.js';
+import { CREATURE_NAMES } from '../js/creatures.js';
+import { ZONES, FISH_PRICES } from '../js/progression.js';
+const assert = (ok, msg) => { if (!ok) throw Error(msg); };
+try {
+  const ids = HABITATS.map(h => h.id);
+  assert(ids.includes('kelp') && ids.includes('deep'), 'Kelp forest and deep ocean habitats exist');
+  assert(ZONES.length === 4 && ZONES.some(z => z.id === 'kelp'), 'Zone list includes kelp forest');
+
+  assert(FISH_SPECIES.length === 19, 'Nineteen fish species');
+  for (const spec of FISH_SPECIES) assert(Number.isFinite(FISH_PRICES[spec.id]), 'Price for ' + spec.id);
+  assert(FISH_SPECIES.find(s => s.id === 'squid').shape === 'squid', 'Squid has tentacled body geometry');
+  assert(['lionfish','tuna','squid','cardinalfish','moorishidol','triggerfish','pufferfish','seahorse','sardine'].every(id => FISH_SPECIES.some(s => s.id === id)), 'Requested fish variety');
+  for (const key of ['stingray', 'shark', 'manta', 'snail', 'clam']) {
+    assert(typeof CREATURE_NAMES[key] === 'string', 'Creature ' + key);
+  }
+
+  for (const quality of ['low', 'medium', 'high']) {
+    const rand = mulberry32(99);
+    const terrain = createTerrain(quality);
+    const group = new THREE.Group();
+    const reef = createReef({ terrain, group, quality, rand });
+    const veg = createVegetation({ terrain, group, quality, rand, timeUniform: { value: 0 } });
+    assert(reef.grottos.length === 2, 'Two explorable grottos');
+    for (const g of reef.grottos) {
+      const floor = terrain.heightAt(g.x, g.z);
+      assert(Math.abs(floor - g.y) < 6, 'Grotto sits on the seabed');
+    }
+    const instanced = group.children.filter(m => m.isInstancedMesh && m.count > 0);
+    assert(instanced.length >= 16, 'Instanced decoration count');
+    assert(instanced.length <= 30, 'Draw calls stay bounded, got ' + instanced.length);
+    let tris = 0;
+    group.traverse(o => {
+      if (o.isMesh) {
+        const g = o.geometry;
+        tris += (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1);
+      }
+    });
+    const budget = quality === 'high' ? 150000 : quality === 'medium' ? 92000 : 48000;
+    assert(tris < budget, quality + ' triangle budget, got ' + Math.round(tris));
+    for (const m of group.children) {
+      if (m.geometry?.attributes?.position) {
+        assert([...m.geometry.attributes.position.array].every(Number.isFinite), 'Finite world geometry');
+      }
+    }
+    veg.dispose();
+    reef.dispose();
+    terrain.dispose();
+  }
+  document.querySelector('pre').textContent =
+    'PASS: kelp + deep habitats, 19 fish species + prices, ghost-net fauna, two grottos, instanced decorations, per-preset triangle budgets, disposal';
+} catch (e) {
+  document.querySelector('pre').textContent = 'FAIL: ' + e.stack;
+  throw e;
+}
+</script>
