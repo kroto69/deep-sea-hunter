@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alur Settlement Invisible — Deep Sea Hunter</title>
+<title>Alur Sekarang — Deep Sea Hunter</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--hatch-widget-bg); color: var(--hatch-widget-text); padding: 20px 14px 40px; }
@@ -47,8 +47,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Alur settlement invisible<br>Deep Sea Hunter</h1>
-  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar cuma tiga momen: approve sekali + storage sekali di awal, dan withdraw di akhir. Sisanya transaksi on-chain jalan di belakang layar.</p>
+  <h1>Alur sekarang<br>Deep Sea Hunter</h1>
+  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar cuma tiga momen: approve sekali + storage sekali di awal, dan withdraw di akhir. Sisanya transaksi on-chain jalan di belakang layar. Branch: <b>feat/auto-mint-merchant-agent</b> (merge, 11 commit di depan origin).</p>
 
   <div class="legend">
     <span class="pill"><span class="dot g"></span> Sudah dibangun</span>
@@ -62,18 +62,20 @@
 
     <div class="step done">
       <div class="card">
-        <h2><span class="num">0.</span>Setup — sekali saja<span class="badge done">SUDAH · SLICE 2</span></h2>
+        <h2><span class="num">0.</span>Setup — sekali saja<span class="badge done">SUDAH</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
           <ul>
             <li>Connect wallet (Meteor / MyNearWallet / HERE) → verify, sign 1 pesan</li>
             <li>Tombol <b>ENABLE INVISIBLE SETTLEMENT</b> → approve <b>1 kali</b> di wallet</li>
             <li>Storage deposit <b>1 kali</b> (0,009 NEAR)</li>
+            <li>Auto-mint: tidak ada aksi pemain — tombol <b>VERIFY WALLET · ENABLE AUTO-MINT</b></li>
           </ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
           <ul>
             <li>Wallet terikat ke akun game (<code>players.wallet_account</code>)</li>
             <li>Function Call key ditambah ke akun user — scope: kontrak merchant, method <code>mint_catch / mt_transfer / mt_batch_transfer</code>, allowance 0,25 NEAR (gas saja)</li>
+            <li>Operator: <code>AUTO_MINT_ENABLED</code> + kunci owner di <code>~/.near-credentials</code> (tidak pernah masuk repo)</li>
             <li>Storage didaftarkan di kontrak merchant</li>
           </ul>
         </div>
@@ -98,32 +100,40 @@
 
     <div class="step done">
       <div class="card">
-        <h2><span class="num">2.</span>Mint — tanpa sadar<span class="badge done">SUDAH · SLICE 2</span></h2>
+        <h2><span class="num">2.</span>Mint — tanpa sadar, dua jalur<span class="badge done">A LIVE DI V2 · B BUTUH REDEPLOY</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
-          <ul><li><b>Tidak ada apa-apa.</b> Di tab chain cuma tertulis “last catch settled · hash…”.</li></ul>
+          <ul><li><b>Tidak ada apa-apa.</b> Di tab chain cuma tertulis status auto-mint + “last catch settled · hash…”.</li></ul>
         </div>
-        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+        <div class="lane chain"><span class="tag">JALUR A — OPERATOR AUTO-MINT (server)</span>
           <ul>
-            <li>Frontend minta tanda tangan server: <code>POST /api/near/receipt-signature</code></li>
-            <li>Panggil <code>mint_catch</code> pakai session key → token <code>fish:{receipt_id}</code> mint ke akun user</li>
-            <li>Hash tercatat di riwayat settlement (tab chain)</li>
+            <li>Setelah COMMIT, <code>hunts.js</code> → <code>mintReceipt</code> → <code>mint_asset</code> pakai kunci owner</li>
+            <li>Token <code>fish:catch-{receipt}</code> + 1 purchase order → <code>token_id</code> ditulis</li>
+            <li><b>Live di v2 Testnet</b> (mint terverifikasi)</li>
           </ul>
         </div>
-        <div class="note"><b>Kalau gagal</b> (offline, storage kurang): receipt antre di HP, dicoba lagi otomatis pas buka game berikut. Game tidak pernah nunggu settlement.</div>
+        <div class="lane chain"><span class="tag">JALUR B — SESSION KEY (browser)</span>
+          <ul>
+            <li>Frontend minta tanda tangan server: <code>POST /api/near/receipt-signature</code></li>
+            <li>Panggil <code>mint_catch</code> pakai session key → token <code>fish:{receipt}</code></li>
+            <li>Lalu <code>POST /api/near/record-mint</code>: server cek <code>mt_balance_of</code> → <code>token_id</code> ditulis</li>
+            <li><b>Lokal saja</b> — v2 yang live tidak punya <code>mint_catch</code>, butuh redeploy</li>
+          </ul>
+        </div>
+        <div class="note"><b>Penjaga:</b> <code>token_id</code> sudah terisi → jalur lain skip. Satu receipt = satu token. Kalau record gagal (RPC mati), receipt antre sebagai “minted” dan cuma record-nya diulang pas buka game lagi.</div>
       </div>
     </div>
 
-    <div class="step next">
+    <div class="step done">
       <div class="card">
-        <h2><span class="num">3.</span>Sell ke merchant<span class="badge next">BELUM · SLICE 3</span></h2>
+        <h2><span class="num">3.</span>Sell ke merchant (CR)<span class="badge done">SUDAH (OFF-CHAIN) · TRANSFER BELUM</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
-          <ul><li>Klik SELL → <b>+18 CR</b>. Sudah.</li></ul>
+          <ul><li>Klik SELL → <b>+CR</b>. Sudah.</li></ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
           <ul>
-            <li>CR pindah merchant → player (ledger Postgres, off-chain)</li>
-            <li>Session key panggil <code>mt_transfer</code>: token <code>fish:{receipt_id}</code> → merchant desk</li>
-            <li>Event <code>mt_transfer</code> tercatat di Explorer — “ikan X dijual si Y”</li>
+            <li><code>quote()</code> / <code>sell()</code> menolak receipt yang sudah ter-mint (<code>catch_minted_onchain</code>) dan yang sedang listing (<code>receipt_listed</code>)</li>
+            <li>CR pindah merchant → player (ledger Postgres, off-chain); stok merchant +1, demand −1</li>
+            <li>Transfer token on-chain (<code>mt_transfer</code> via session key) <b>belum dibangun</b> — slice 3</li>
           </ul>
         </div>
         <div class="note"><b>Jalur lama tetap ada terpisah:</b> sell di tab NEAR pakai <code>accept_purchase_order</code> + klaim NEAR, perlu sign wallet. Itu bukan jalur invisible.</div>
@@ -132,18 +142,52 @@
 
     <div class="step next">
       <div class="card">
-        <h2><span class="num">4.</span>Jual / beli di toko (marketplace)<span class="badge next">BELUM · SLICE 3</span></h2>
+        <h2><span class="num">4.</span>Toko pemain — marketplace mothership<span class="badge next">BACKEND JALAN · UI BELUM</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
           <ul>
-            <li>Penjual: listing ikan di toko, harga bebas</li>
+            <li>Beli lisensi <b>500 CR</b> → buka toko → listing ikan, harga bebas</li>
             <li>Pembeli: klik BUY → CR pindah, ikan langsung masuk inventory</li>
           </ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
           <ul>
-            <li>CR pindah pembeli → penjual (atomik, Postgres), receipt pindah ke pembeli</li>
-            <li>Token on-chain <b>tidak bisa langsung</b>: kunci session penjual ada di browser penjual, dan penjual sedang offline</li>
-            <li>Transfer token antre — dieksekusi <b>saat penjual buka game lagi</b> (client penjual flush queue). Token nyusul, ikan sudah di tangan pembeli duluan.</li>
+            <li>Swap atomik CR ↔ receipt (ledger <code>shop_sale</code>); listing = escrow dari merchant</li>
+            <li>Tick: <code>marketStock</code> = stok merchant + listing aktif → ikan toko menekan harga seperti stok merchant</li>
+            <li>Settlement on-chain penjualan toko butuh transfer leg (slice 3); UI hub belum dibangun</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step done">
+      <div class="card">
+        <h2><span class="num">5.</span>Jual token — NEAR tab<span class="badge done">TERBUKTI DI TESTNET</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul><li>SELL di tab NEAR → sign wallet → klaim NEAR.</li></ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li><code>accept_purchase_order</code> → token ke merchant desk, seller claim NEAR</li>
+            <li>Final di Testnet (v1 + v2), bukti di <code>docs/ONCHAIN_ECONOMY_PROOF.md</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step done">
+      <div class="card">
+        <h2><span class="num">6.</span>Tick harga + Fast Forward<span class="badge done">SUDAH</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul>
+            <li>Harga berubah tiap tick; tooltip <b>WHY THIS PRICE?</b> menjelaskan alasannya</li>
+            <li>Fast Forward: 7 hari simulasi dalam 1 menit; merchant bisa bangkrut lalu dibuka lagi via invest</li>
+          </ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>Tick 60 dtk: populasi tumbuh → harga dari base + scarcity + stok pasar + demand (maks ±10%/tick) → order baru</li>
+            <li>Bangkrut (saldo ≤ floor 1000 CR) → toko tutup, buka lagi cuma lewat invest</li>
+            <li>Fast Forward: simulasi lokal, tidak menyentuh DB/chain</li>
           </ul>
         </div>
       </div>
@@ -151,14 +195,14 @@
 
     <div class="step open">
       <div class="card">
-        <h2><span class="num">5.</span>Withdraw CR → NEAR — di sinilah user “ketemu” chain<span class="badge open">BELUM DIPUTUSKAN</span></h2>
+        <h2><span class="num">7.</span>Withdraw CR → NEAR — di sinilah user “ketemu” chain<span class="badge open">BELUM DIPUTUSKAN</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
           <ul><li>Layar withdraw → pilih jumlah CR → NEAR masuk wallet.</li></ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
           <ul>
             <li>CR dibakar (off-chain) → NEAR dikirim dari treasury</li>
-            <li><b>Rate CR→NEAR + sumber NEAR belum diputuskan</b></li>
+            <li><b>Rate CR→NEAR + sumber NEAR belum diputuskan</b> (konversi agent 1 CR = 0,0005 NEAR sudah ada di code, tapi flow WD-nya belum)</li>
           </ul>
         </div>
       </div>
@@ -171,7 +215,8 @@
     <ul>
       <li>Guest tanpa wallet tetap main <b>off-chain penuh</b> — tidak ada akun NEAR untuk dituju tokennya.</li>
       <li>Session key <b>tidak bisa</b> pindah NEAR, panggil kontrak lain, atau attach &gt; 1 yocto. Allowance habis → grant ulang sekali.</li>
-      <li>Kontrak: merchant Testnet (<code>dsh-merchant-v1.deepfish-owner.testnet</code>).</li>
+      <li>Kontrak live: <code>dsh-merchant-v2.deepfish-owner.testnet</code> (code hash <code>8PjySGU8…</code>). WASM lokal hasil merge (SHA <code>86fbc4ad…</code>) punya <code>mint_catch</code> — butuh redeploy sebelum jalur session-key jalan on-chain.</li>
+      <li>Sisa jujur: client yang dimodifikasi bisa skip record-mint; rapat penuh butuh cek on-chain di dalam <code>sell()</code> (belum dibangun).</li>
       <li>Untuk juri: makin bagus invisible-nya, makin tidak ada yang kelihatan — yang ditunjukin itu <b>riwayat hash di tab chain</b>.</li>
     </ul>
   </div>
