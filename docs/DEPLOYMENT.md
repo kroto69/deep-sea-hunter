@@ -123,9 +123,10 @@ cp .env.example .env
 
 Fill in `.env`. The fields that most often trip people up:
 
-- `NEAR_MERCHANT_CONTRACT_ID` — **add this line yourself; it is not in
-  `.env.example`.** Without it the NEAR tab and all merchant-chain
-  endpoints return `merchant_contract_not_configured` (503).
+- `NEAR_MERCHANT_CONTRACT_ID` — fill in the deployed merchant contract
+  account (the line is in `.env.example`, empty by default). Without it
+  the NEAR tab and all merchant-chain endpoints return
+  `merchant_contract_not_configured` (503).
 - `NEAR_MERCHANT_OWNER_ID` + `AUTO_MINT_ENABLED=true` — only together, and
   only if the owner key file from §2 exists on this machine. Leave
   `AUTO_MINT_ENABLED=false` (the default) if this server should not mint.
