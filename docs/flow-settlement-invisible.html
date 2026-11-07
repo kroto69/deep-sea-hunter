@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alur Settlement Invisible — Deep Sea Hunter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--hatch-widget-bg); color: var(--hatch-widget-text); padding: 20px 14px 40px; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 22px; line-height: 1.25; margin-bottom: 6px; }
+  .sub { font-size: 14px; line-height: 1.5; color: var(--hatch-widget-muted); margin-bottom: 16px; }
+  .sub b { color: var(--hatch-widget-text); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 22px; }
+  .pill { font-size: 12px; padding: 4px 10px; border-radius: 20px; background: var(--hatch-widget-surface); border: 1px solid var(--hatch-widget-border); color: var(--hatch-widget-text); }
+  .pill .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .dot.g { background: #4a9e6d; } .dot.a { background: #d9a441; } .dot.b { background: #7a9cc4; }
+  .flow { position: relative; padding-left: 30px; }
+  .flow::before { content: ""; position: absolute; left: 10px; top: 8px; bottom: 8px; width: 2px; background: var(--hatch-widget-border); }
+  .step { position: relative; margin-bottom: 18px; }
+  .step::before { content: ""; position: absolute; left: -30px; top: 20px; width: 22px; height: 22px; border-radius: 50%; background: var(--hatch-widget-surface); border: 2px solid var(--hatch-widget-muted); z-index: 1; }
+  .step.done::before { border-color: #4a9e6d; background: #4a9e6d; }
+  .step.next::before { border-color: #d9a441; background: #d9a441; }
+  .step.open::before { border-color: #7a9cc4; background: #7a9cc4; }
+  .card { background: var(--hatch-widget-surface); border: 1px solid var(--hatch-widget-border); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { font-size: 16px; margin-bottom: 2px; }
+  .card h2 .num { color: var(--hatch-widget-muted); font-weight: 600; margin-right: 4px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .4px; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: 2px; border: 1px solid; }
+  .badge.done { color: #4a9e6d; border-color: #4a9e6d; }
+  .badge.next { color: #b98a1d; border-color: #d9a441; }
+  .badge.open { color: #5b84b8; border-color: #7a9cc4; }
+  .lane { margin-top: 10px; border-radius: 8px; padding: 10px 12px; font-size: 13.5px; line-height: 1.55; background: var(--hatch-widget-surface-muted); }
+  .lane .tag { font-size: 11px; font-weight: 700; letter-spacing: .6px; display: block; margin-bottom: 3px; }
+  .lane.see .tag { color: var(--hatch-widget-muted); }
+  .lane.chain .tag { color: var(--hatch-widget-accent); }
+  .lane ul { padding-left: 18px; }
+  .lane li { margin-bottom: 2px; }
+  .lane code { background: var(--hatch-widget-border); padding: 0 4px; border-radius: 4px; font-size: 12px; }
+  .note { margin-top: 10px; font-size: 12.5px; line-height: 1.5; color: var(--hatch-widget-muted); background: var(--hatch-widget-surface-muted); border: 1px dashed var(--hatch-widget-border); border-radius: 8px; padding: 9px 11px; }
+  .note b { color: var(--hatch-widget-text); }
+  .foot { margin-top: 24px; border-top: 1px solid var(--hatch-widget-border); padding-top: 14px; font-size: 13px; line-height: 1.6; color: var(--hatch-widget-muted); }
+  .foot b { color: var(--hatch-widget-text); }
+  .foot ul { padding-left: 18px; margin-top: 6px; }
+  .foot li { margin-bottom: 3px; }
+  .foot code { background: var(--hatch-widget-border); padding: 0 4px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Alur settlement invisible<br>Deep Sea Hunter</h1>
+  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar cuma tiga momen: approve sekali + storage sekali di awal, dan withdraw di akhir. Sisanya transaksi on-chain jalan di belakang layar.</p>
+
+  <div class="legend">
+    <span class="pill"><span class="dot g"></span> Sudah dibangun</span>
+    <span class="pill"><span class="dot a"></span> Belum dibangun</span>
+    <span class="pill"><span class="dot b"></span> Belum diputuskan</span>
+    <span class="pill">Yang user lihat</span>
+    <span class="pill">Di belakang layar (on-chain)</span>
+  </div>
+
+  <div class="flow">
+
+    <div class="step done">
+      <div class="card">
+        <h2><span class="num">0.</span>Setup — sekali saja<span class="badge done">SUDAH · SLICE 2</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul>
+            <li>Connect wallet (Meteor / MyNearWallet / HERE) → verify, sign 1 pesan</li>
+            <li>Tombol <b>ENABLE INVISIBLE SETTLEMENT</b> → approve <b>1 kali</b> di wallet</li>
+            <li>Storage deposit <b>1 kali</b> (0,009 NEAR)</li>
+          </ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>Wallet terikat ke akun game (<code>players.wallet_account</code>)</li>
+            <li>Function Call key ditambah ke akun user — scope: kontrak merchant, method <code>mint_catch / mt_transfer / mt_batch_transfer</code>, allowance 0,25 NEAR (gas saja)</li>
+            <li>Storage didaftarkan di kontrak merchant</li>
+          </ul>
+        </div>
+        <div class="note"><b>Ini satu-satunya setup yang terlihat.</b> Setelah ini tidak ada popup lagi.</div>
+      </div>
+    </div>
+
+    <div class="step done">
+      <div class="card">
+        <h2><span class="num">1.</span>Dive &amp; catch<span class="badge done">SUDAH</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul><li>Dive → tembak → <b>“CAUGHT Clownfish”</b>. Sudah, itu saja.</li></ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>Server terbitkan <b>catch receipt</b> (UUID) → simpan di Postgres</li>
+            <li>Populasi habitat −1, ikan masuk inventory</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step done">
+      <div class="card">
+        <h2><span class="num">2.</span>Mint — tanpa sadar<span class="badge done">SUDAH · SLICE 2</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul><li><b>Tidak ada apa-apa.</b> Di tab chain cuma tertulis “last catch settled · hash…”.</li></ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>Frontend minta tanda tangan server: <code>POST /api/near/receipt-signature</code></li>
+            <li>Panggil <code>mint_catch</code> pakai session key → token <code>fish:{receipt_id}</code> mint ke akun user</li>
+            <li>Hash tercatat di riwayat settlement (tab chain)</li>
+          </ul>
+        </div>
+        <div class="note"><b>Kalau gagal</b> (offline, storage kurang): receipt antre di HP, dicoba lagi otomatis pas buka game berikut. Game tidak pernah nunggu settlement.</div>
+      </div>
+    </div>
+
+    <div class="step next">
+      <div class="card">
+        <h2><span class="num">3.</span>Sell ke merchant<span class="badge next">BELUM · SLICE 3</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul><li>Klik SELL → <b>+18 CR</b>. Sudah.</li></ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>CR pindah merchant → player (ledger Postgres, off-chain)</li>
+            <li>Session key panggil <code>mt_transfer</code>: token <code>fish:{receipt_id}</code> → merchant desk</li>
+            <li>Event <code>mt_transfer</code> tercatat di Explorer — “ikan X dijual si Y”</li>
+          </ul>
+        </div>
+        <div class="note"><b>Jalur lama tetap ada terpisah:</b> sell di tab NEAR pakai <code>accept_purchase_order</code> + klaim NEAR, perlu sign wallet. Itu bukan jalur invisible.</div>
+      </div>
+    </div>
+
+    <div class="step next">
+      <div class="card">
+        <h2><span class="num">4.</span>Jual / beli di toko (marketplace)<span class="badge next">BELUM · SLICE 3</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul>
+            <li>Penjual: listing ikan di toko, harga bebas</li>
+            <li>Pembeli: klik BUY → CR pindah, ikan langsung masuk inventory</li>
+          </ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>CR pindah pembeli → penjual (atomik, Postgres), receipt pindah ke pembeli</li>
+            <li>Token on-chain <b>tidak bisa langsung</b>: kunci session penjual ada di browser penjual, dan penjual sedang offline</li>
+            <li>Transfer token antre — dieksekusi <b>saat penjual buka game lagi</b> (client penjual flush queue). Token nyusul, ikan sudah di tangan pembeli duluan.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="step open">
+      <div class="card">
+        <h2><span class="num">5.</span>Withdraw CR → NEAR — di sinilah user “ketemu” chain<span class="badge open">BELUM DIPUTUSKAN</span></h2>
+        <div class="lane see"><span class="tag">YANG USER LIHAT</span>
+          <ul><li>Layar withdraw → pilih jumlah CR → NEAR masuk wallet.</li></ul>
+        </div>
+        <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
+          <ul>
+            <li>CR dibakar (off-chain) → NEAR dikirim dari treasury</li>
+            <li><b>Rate CR→NEAR + sumber NEAR belum diputuskan</b></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <b>Yang perlu diingat:</b>
+    <ul>
+      <li>Guest tanpa wallet tetap main <b>off-chain penuh</b> — tidak ada akun NEAR untuk dituju tokennya.</li>
+      <li>Session key <b>tidak bisa</b> pindah NEAR, panggil kontrak lain, atau attach &gt; 1 yocto. Allowance habis → grant ulang sekali.</li>
+      <li>Kontrak: merchant Testnet (<code>dsh-merchant-v1.deepfish-owner.testnet</code>).</li>
+      <li>Untuk juri: makin bagus invisible-nya, makin tidak ada yang kelihatan — yang ditunjukin itu <b>riwayat hash di tab chain</b>.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>
