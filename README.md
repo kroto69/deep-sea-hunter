@@ -51,6 +51,8 @@ python3 -m http.server 8080 --bind localhost
 
 Open `http://localhost:8080`. API readiness: `http://127.0.0.1:3000/ready`. Guest play does not require wallet, seed phrase, wallet popup, or gas prompt.
 
+Deploying for someone else (keys, contract deploy, Render): see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## Run tests
 
 Backend unit tests:
@@ -119,4 +121,4 @@ No compliance claim is made. Sandbox pass validates local mint/order/sale/withdr
 
 RPC verified finalized Testnet sell `EA4yhL4izzZtQBG1WLLUEQnVbaSgwVBf2A8wp82zeu3L`: signer `dsh-player-v1.deepfish-owner.testnet`, receiver `dsh-merchant-v1.deepfish-owner.testnet`, method `accept_purchase_order`, order `order-1`, one token. Receipt succeeded, emitted `nep245 mt_transfer`, and state shows seller balance 0, merchant balance 1, seller claim 0.01 NEAR, order filled, accounting invariant true. Explorer: https://explorer.testnet.near.org/transactions/EA4yhL4izzZtQBG1WLLUEQnVbaSgwVBf2A8wp82zeu3L. Separate storage top-up and failed attempt also occurred; details and hashes in `docs/ONCHAIN_ECONOMY_PROOF.md`. UI checks transaction finality and successful merchant receipts, then state still requires `SYNC ON-CHAIN`. Before claiming economic settlement, verify finalized hash, signer/method/arguments, receipts, and before/after contract balance, claim, and token views on Testnet. Do not retry a paid transaction while status is unknown. Deployment, funding, or reinitialization requires explicit approval.
 
-Main documentation: [`ROADMAP.md`](ROADMAP.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md), [`docs/ONCHAIN_ECONOMY_PROOF.md`](docs/ONCHAIN_ECONOMY_PROOF.md).
+Main documentation: [`ROADMAP.md`](ROADMAP.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md), [`docs/ONCHAIN_ECONOMY_PROOF.md`](docs/ONCHAIN_ECONOMY_PROOF.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
