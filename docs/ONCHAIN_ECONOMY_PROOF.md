@@ -67,7 +67,7 @@ is stored in `.env`, this repo, or any migration.
 Prerequisites verified on Testnet:
 
 - `storage_deposit` for `flatrice4664.testnet`: `CGAxFr7CU74rhpyvNsfgJr6CRJV4533Ly6CDiymjKhnA`, total 0.1 NEAR.
-- RPC `https://test.rpc.fastnear.com` reports `chain_id=testnet`. `https://rpc.testnet.near.org` is deprecated and returns HTTP 429, which silently broke every chain view.
+- RPC `https://test.rpc.fastnear.com` reports `chain_id=testnet`. `https://rpc.testnet.near.org` is deprecated and unreachable/timing out from this sandbox (no HTTP status returned 2026-11-08, 429 not confirmed); the server moved its chain views to `https://test.rpc.fastnear.com` (`server/src/config/env.js:30`), but `js/session-key.js:27` still points the frontend session-key RPC at the deprecated endpoint.
 
 Signer-path proof (server code, not a UI session):
 
@@ -83,11 +83,11 @@ Rules the server enforces:
 
 - Mint happens only after every off-chain hunt rule passed, and only after the DB transaction committed.
 - `asset_id` is `catch-<receipt uuid>`; the contract rejects a repeat, so a retried mint cannot double supply.
-- Mint is skipped, not failed, when the player has no bound wallet or no on-chain storage registration.
-- Orders are keyed per token (`order-fish:<asset>`), because `create_purchase_order` ties an order to one `token_id`. One order per token for life.
-- Price bridge is fixed at 1 CR = 0.0005 NEAR; the CR price itself stays dynamic (population, demand, stock, quality).
-- A catch that already has a token can no longer be sold for CR, so one fish cannot be paid twice.
-- When `treasury_available` cannot cover one unit, the agent reports `broke` and places no order.
+- Mint is skipped when the player has no bound wallet (`wallet_not_bound`); when the player has no on-chain storage registration the mint fails with `player_not_registered`.
+- Orders are keyed per token (`order-fish:<asset>`) by the server agent (`ensureOrder` reuses one order id per token and never reopens a filled/expired one), so one order per token for life is server policy; the contract itself only enforces unique `order_id`, not one-order-per-token.
+- Price bridge is fixed at 1 CR = 0.0005 NEAR; the CR price itself stays dynamic (population, demand, stock).
+- A catch whose token has been recorded (`catch_receipts.token_id` set, by auto-mint or `record-mint`) can no longer be sold for CR; a session-key mint that skips `record-mint` leaves the fish sellable off-chain until the record lands — see `docs/SETTLEMENT_SESSION_KEYS.md` residual.
+- `ensureOrder` reports `broke` and places no order when `treasury_available` cannot cover one unit; note `agentTick`'s summary `broke` flag is only true when treasury is exactly zero, so the two disagree for a partially-funded treasury.
 
 ## Verification after explicit authorization
 

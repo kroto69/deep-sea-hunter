@@ -8,7 +8,7 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 |---|---|---|
 | Gameplay and existing Hub tabs | DONE / TESTED | Existing Three.js gameplay, controls, progression and Guest save remain. Automated coverage is headless only. |
 | Fast Forward | SIMULATED / TESTED | Seven local simulated days in one minute; does not mutate save, backend or chain. |
-| Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices and merchant demand. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
+| Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices, each with its own merchant demand quantity. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
 | Merchant bankruptcy + investment | IMPLEMENTED / TESTED (unit + Fast Forward; DB integration written, needs `TEST_DATABASE_URL`) | Merchant closes when its available balance reaches its reserve floor (default 1000 CR) and reopens only when a player invests enough CR to lift it above the floor (`POST /api/market/invest`). Rule lives in `js/economy-rules.js`; closure is detected on sale and on market tick; Fast Forward simulates it. Off-chain CR only. |
 | Mothership marketplace (player shops) | IMPLEMENTED LOCALLY / TESTED (unit; DB integration written, needs `TEST_DATABASE_URL`) | Hub UI built 2026-11-07 (slice 2): SHOPS tab — buy the one-time 500 CR boat-stall license (`POST /api/market/shops/license`, CR sinks to game treasury); players list caught fish at their own price and buy each other's fish in one atomic CR↔receipt swap. Listed receipts are escrowed from the merchant, and active shop listings count as market supply in the tick price (one market, one price signal). Design in `docs/MARKETPLACE_MOTHERSHIP.md`. Off-chain CR only; shop-sale on-chain settlement still needs the transfer leg (slice 3) — the receipt-signing endpoint (`POST /api/near/receipt-signature`) already exists. |
 | NEAR merchant | ON-CHAIN SELL VERIFIED / COMPLIANCE INCOMPLETE | Testnet `accept_purchase_order` finalized; hash and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint live two ways: operator auto-mint (verified on v2 Testnet) and receipt-verified session-key mint (`mint_catch`, local, needs a redeploy — deployed v2 has no `mint_catch`). NEP-245 blockers remain. |
@@ -16,7 +16,7 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders only. No identity provider or email delivery. Guest remains playable. |
 | Existing collectibles NFT | DONE / TESTED (historical deployment only) | Separate deployed NFT contract; does not prove merchant trades. Not modified here. |
 
-Verified Testnet sell finalized for one existing demo token. This proves one merchant transaction, not full NEP-245 compliance or production readiness. Local simulations and PostgreSQL balances remain off-chain.
+Verified Testnet sells finalized for three merchant transactions on v1 and v2, including the sale of an auto-minted catch token. This proves merchant transactions, not full NEP-245 compliance or production readiness. Local simulations and PostgreSQL balances remain off-chain.
 
 ## Where the flow stands (2026-11-07)
 
@@ -106,11 +106,11 @@ NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes s
 
 ## NEP-245 audit status
 
-The separate merchant prototype is **INCOMPLETE / UNVERIFIED** against official NEP-245. One `accept_purchase_order` flow is verified finalized on Testnet; this does not establish full NEP-245 compliance. Known blockers:
+The separate merchant prototype is **INCOMPLETE / UNVERIFIED** against official NEP-245. Three `accept_purchase_order` flows are verified finalized on Testnet (v1 `EA4yhL4…`, v2 `HzMGu8uS…`, v2 `2er8mzfv…`); this does not establish full NEP-245 compliance. Known blockers:
 
 - No real cross-contract receiver round-trip test; Sandbox tests cover only merchant settlement, not malicious receiver behavior.
 - `EVENT_JSON` logs: mint + transfer shapes are now unit-asserted locally; a runtime log assertion on Testnet is still missing.
-- Storage operations: per-write delta charging and the fund-above-minimum rule are unit-tested (minting to a minimum-funded player fails cleanly); async refunds still lack a resolver and interleaved-operation invariant proof is still missing.
+- Storage operations: per-write delta charging and the fund-above-minimum rule are unit-tested (minting to a minimum-funded player fails cleanly); async refunds have a resolver (`resolve_storage_transfer`, unit-tested) but still lack a Testnet runtime proof, and interleaved-operation invariant proof is still missing.
 - Metadata JSON ABI: missing-token `None` array shape is unit-verified; exact on-chain view serialization still needs Testnet confirmation.
 - Resolver rollback/failure behavior has unit-only evidence, not runtime integration evidence.
 - Batch has a hard 10-token cap and rejects duplicate IDs and empty batches (all three rejections unit-tested); these documented MVP restrictions need compatibility review. Arithmetic/storage edge cases need more tests.

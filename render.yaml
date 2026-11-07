@@ -1,17 +1,17 @@
 # Deep Sea Hunter — Render Blueprint (satu paket, diputuskan 2026-11-07)
 # API Docker + Postgres free + frontend statis, semua di Render.
-# Cara pakai: push branch feat/auto-mint-merchant-agent (19 commit di depan
-# origin, BELUM push), lalu di Render Dashboard > New > Blueprint > pilih repo ini.
+# Cara pakai: kode sudah di branch `main` (HEAD `f10eef3`, sudah sama dengan `origin/main`); lalu di Render Dashboard > New > Blueprint > pilih repo ini.
 #
 # Yang masih harus diisi manual:
 #   1. ALLOWED_ORIGIN — isi URL frontend statis (https://deep-sea-hunter.onrender.com)
 #      Render akan menanyakannya saat Blueprint pertama dibuat (sync: false).
-#   2. Cek URL API setelah Blueprint dibuat. API base di index.html + js/collectibles.js
-#      sudah diarahkan ke https://deep-sea-hunter-api.onrender.com. Kalau Render
-#      mengganti nama service (nama sudah dipakai orang lain), URL aslinya beda —
-#      beri tahu bro URL aslinya, bro betulkan 2 baris itu dan push lagi.
+#   2. Cek URL API setelah Blueprint dibuat. API base hanya ada di `js/api-config.js`
+#      (satu baris `API_BASE`, `https://deep-sea-hunter-api.onrender.com`); `index.html`
+#      dan `js/collectibles.js` tidak memuat URL API — keduanya impor dari `api-config.js`.
+#      Kalau Render mengganti nama service, betulkan 1 baris itu di `js/api-config.js` dan push lagi.
 #   3. Sekali saja setelah DB pertama dibuat, jalankan di Render Shell: npm run seed
 #      (isi 19 spesies + Dock Merchant treasury 10.000 CR; idempotent).
+#   4. Bila mau invisible settlement / auto-mint, isi manual di dashboard: `SETTLEMENT_SIGNING_KEY`, `AUTO_MINT_ENABLED=true`, `NEAR_MERCHANT_OWNER_ID` — ketiganya tidak ada di `render.yaml` (lihat `docs/DEPLOYMENT.md` §6 langkah 3).
 #
 # Catatan plan: Free Web Service tidur setelah ~15 menit tanpa request — tick 60 detik
 # ikut berhenti dan request pertama jadi lambat. Buat demo/penjurian pakai Starter

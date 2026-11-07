@@ -49,14 +49,10 @@ keeps the player as signer, which is also the more player-owned design.
    the session key through `near-api-js` directly to Testnet RPC. No wallet
    interaction. The call returns a transaction hash, stored with the trade so
    the player can check it later.
-4. **Exhaustion** — when the allowance is spent, calls fail with
-   `NotEnoughAllowance`. The game must ask for a fresh grant (same one-time
-   flow) instead of failing silently. Allowance is charged at the buy price
+4. **Exhaustion** — calls fail with `NotEnoughAllowance`; today the receipt stays queued and retries, with no re-grant prompt — a fresh-grant prompt on allowance exhaustion is still to be built. Allowance is charged at the buy price
    and partially refunded, so 0.25 NEAR covers roughly 100 settlement calls
    at ~0.001–0.003 NEAR gas each (estimate — measure on Testnet).
-5. **Revoke** — the player deletes the key on-chain (`DeleteKey` action, one
-   wallet approval) or from the game UI; the game also deletes its local
-   copy. A revoked key can no longer settle, and the game falls back to
+5. **Revoke** — the player deletes the key on-chain (`DeleteKey` action, one wallet approval) via `revokeSessionKey()`; no game-UI button wires to it yet. A revoked key can no longer settle, and the game falls back to
    off-chain-only trades until a new key is granted.
 
 ## Contract surface (implemented, `contracts/merchant/src/lib.rs`)
@@ -101,15 +97,12 @@ valid on-chain.
    caller owns) — built in slice 2.
 2. The frontend calls `mint_catch` with the session key. The token lands in
    the player's on-chain balance; the receipt is marked used on-chain.
-3. The sell flow then transfers that token: the player's session key calls
-   `mt_transfer` to the merchant desk (or to the buyer, once P2P lands), with
-   a memo carrying the receipt ID and price. The CR side still settles
+3. The sell flow *will* transfer that token: once the transfer leg lands (Remains §1), the player's session key will call `mt_transfer` to the merchant desk (or the buyer), with a memo carrying the receipt ID and price. Today only the catch-time `mint_catch` runs via the session key. The CR side still settles
    off-chain instantly, exactly as today.
 
 ### Outbox / retry
 
-Settlement calls are queued in `localStorage` (`dsh.session.outbox`) before
-sending. A failed call stays queued and is retried on the next launch while a
+Settlement calls are queued in `localStorage` (`dsh.settlement.pending`, with history in `dsh.settlement.history`) before sending; the generic `dsh.session.outbox` outbox in `js/session-key.js` is currently unused by the catch flow. A failed call stays queued and is retried on the next launch while a
 valid session key exists. The server keeps the trade itself (off-chain CR is
 never blocked on settlement), so a missed settlement is a missing receipt,
 not lost funds — but it must be visible in the trade history as "settlement
@@ -143,8 +136,7 @@ Built and verified locally (2026-11-07):
 - Contract `set_settlement_key` + `mint_catch` with receipt replay and
   signature checks; Rust suite 52 → 59 passed, 0 failed (7 new tests,
   including a real ed25519 test vector generated with `node:crypto`).
-  The mocked `ed25519_verify` was proven to verify for real: a tampered
-  signature fails the test.
+  The near-sdk unit-test environment verifies the real ed25519 signature for real: a tampered signature fails the test (`tests.rs:145`).
 - `js/session-key.js`: keypair generation, one-approval grant (AddKey),
   revoke (DeleteKey), on-chain status check, background
   `callWithSessionKey`, `settleCatch`, and the localStorage outbox.

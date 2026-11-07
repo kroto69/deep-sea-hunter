@@ -15,8 +15,9 @@
 #   3. Asks for confirmation, then deploys with `near deploy` and
 #      initFunction `new` (owner / merchant desk / treasury must be
 #      three distinct accounts; max_trade defaults to 1000 NEAR).
-#   4. Verifies the account now carries code (`near state`) and prints
-#      the explorer link so the deploy transaction hash can be recorded.
+#   4. Runs `near state` afterwards and prints the explorer link so the
+#      deploy transaction hash can be recorded from the log (no post-deploy
+#      code check — the no-code check runs before deploy).
 #   5. With --fund-near N, funds the on-chain treasury (owner-only
 #      `fund_treasury`, a paid call) after a second confirmation.
 #   6. Prints the exact .env / Render values to set afterwards.

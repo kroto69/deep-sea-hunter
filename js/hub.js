@@ -139,7 +139,7 @@ export class Hub {
       html += rows.length
         ? rows.map(([id, n]) => `<div class="hub-row"><div>${id.toUpperCase()}</div><div class="hub-dim">${n} × ${FISH_PRICES[id] || 20} CR</div><input class="sell-qty" type="number" min="1" max="${n}" step="1" value="1" data-qty-for="${id}" aria-label="How many ${id} to sell"><button class="hub-btn" data-action="sell-qty" data-id="${id}">SELL</button></div>`).join('')
         : `<div class="hub-note">No fish in storage. Hunt and it lands here automatically.</div>`;
-      const total = rows.reduce((s, [id, n]) => s + (FISH_PRICES[id] || 20) * n, 0);
+      const total = Math.round(rows.reduce((s, [id, n]) => s + (FISH_PRICES[id] || 20) * n, 0) * (1 + p.upgradeLevel('sales') * 0.15));
       html += `<button class="hub-btn wide" data-action="sell">SELL ALL · ${total} CR</button>`;
       const specimens = Object.keys(p.data.rare);
       html += `<div class="hub-note">Inventory · photos: ${Object.keys(p.data.photos).length} · rare specimens: ${specimens.length ? specimens.join(', ') : 'none'}</div>`;

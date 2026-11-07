@@ -48,7 +48,7 @@
 <body>
 <div class="wrap">
   <h1>Alur sekarang<br>Deep Sea Hunter</h1>
-  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar cuma tiga momen: approve sekali + storage sekali di awal, dan withdraw di akhir. Sisanya transaksi on-chain jalan di belakang layar. Branch: <b>feat/auto-mint-merchant-agent</b> (merge, 19 commit di depan origin).</p>
+  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar: connect + verify (sign 1 pesan), approve session key sekali, storage deposit sekali, lalu sign wallet tiap jual/withdraw on-chain; mint-nya jalan di belakang layar. Sisanya transaksi on-chain jalan di belakang layar. Branch: <b>main</b> (HEAD <code>f10eef3</code>, sudah sama dengan <code>origin/main</code>; <code>feat/auto-mint-merchant-agent</code> sudah tergabung).</p>
 
   <div class="legend">
     <span class="pill"><span class="dot g"></span> Sudah dibangun</span>
@@ -68,7 +68,7 @@
             <li>Connect wallet (Meteor / MyNearWallet / HERE) → verify, sign 1 pesan</li>
             <li>Tombol <b>ENABLE INVISIBLE SETTLEMENT</b> → approve <b>1 kali</b> di wallet</li>
             <li>Storage deposit <b>1 kali</b> (0,009 NEAR)</li>
-            <li>Auto-mint: tidak ada aksi pemain — tombol <b>VERIFY WALLET · ENABLE AUTO-MINT</b></li>
+            <li>Auto-mint: tidak ada aksi pemain *setelah* VERIFY WALLET sekali — tombol VERIFY WALLET · ENABLE AUTO-MINT hanya muncul bila binding wallet belum ada.</li>
           </ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
@@ -79,7 +79,7 @@
             <li>Storage didaftarkan di kontrak merchant</li>
           </ul>
         </div>
-        <div class="note"><b>Ini satu-satunya setup yang terlihat.</b> Setelah ini tidak ada popup lagi.</div>
+        <div class="note"><b>Ini satu-satunya setup untuk mint.</b> Setelah ini tidak ada popup untuk mint; jual dan withdraw on-chain tetap perlu sign wallet.</div>
       </div>
     </div>
 
@@ -107,7 +107,7 @@
         <div class="lane chain"><span class="tag">JALUR A — OPERATOR AUTO-MINT (server)</span>
           <ul>
             <li>Setelah COMMIT, <code>hunts.js</code> → <code>mintReceipt</code> → <code>mint_asset</code> pakai kunci owner</li>
-            <li>Token <code>fish:catch-{receipt}</code> + 1 purchase order → <code>token_id</code> ditulis</li>
+            <li>Token <code>fish:catch-{receipt}</code> → <code>token_id</code> ditulis. Purchase order dibuat terpisah oleh agent tick bila treasury on-chain cukup — tidak dijamin tiap mint.</li>
             <li><b>Live di v2 Testnet</b> (mint terverifikasi)</li>
           </ul>
         </div>
@@ -197,11 +197,11 @@
       <div class="card">
         <h2><span class="num">7.</span>Withdraw CR → NEAR — di sinilah user “ketemu” chain<span class="badge open">BELUM DIPUTUSKAN</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
-          <ul><li>Tombol WITHDRAW NEAR di tab NEAR → bayar klaim seller on-chain via withdraw_proceeds (belum terverifikasi — belum ada tx hash). Flow pilih-jumlah-CR → NEAR belum diputuskan.</li></ul>
+          <ul><li>Tombol WITHDRAW NEAR di tab NEAR → bayar klaim seller on-chain via withdraw_proceeds (terverifikasi di v2 — tx <code>CQ8eSUfjDhjEuRnFnsnFfj3rCA4ucD4P9SfC6Sxc3mWu</code>, 0,009 NEAR). Flow pilih-jumlah-CR → NEAR belum diputuskan.</li></ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
           <ul>
-            <li>CR dibakar (off-chain) → NEAR dikirim dari treasury</li>
+            <li>Belum dibangun: tidak ada pembakaran CR dan tidak ada pengiriman NEAR dari treasury untuk CR — WITHDRAW NEAR hanya membayar klaim seller on-chain yang sudah ada.</li>
             <li><b>Rate CR→NEAR + sumber NEAR belum diputuskan</b> (konversi agent 1 CR = 0,0005 NEAR sudah ada di code, tapi flow WD-nya belum)</li>
           </ul>
         </div>

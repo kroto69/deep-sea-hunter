@@ -11,7 +11,7 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 ## Current features
 
 - Underwater gameplay, fish behavior, speargun, oxygen, progression, and tutorial are available.
-- Boat Hub includes Fish Market, player Shops, Equipment, Missions, Dive Zones, progression records, and the NEAR tab.
+- Boat Hub includes Fish Market, player Shops, Equipment, Missions, progression records, and the NEAR tab. (Dive Zones are defined in `js/progression.js` and the server API, but have no Hub UI yet.)
 - Online demo supports catching all 19 fish in `js/fish.js`. Each fish has its own seeded base price and merchant demand. Depleted demand lowers price on a later market tick; Fast Forward previews a separate seven-day simulation in one minute.
 - Dock Merchant validates catch receipts; selling raises merchant stock, reduces demand and merchant treasury, and raises Player Balance. All CR/accounting stays PostgreSQL off-chain.
 - Browser checks are documented for desktop `1280×720` and mobile landscape `844×390`. They do not prove real-phone FPS or performance.
@@ -24,7 +24,7 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 **Player Wallet** is optional for NEAR actions. It manages a NEAR address and signs wallet transactions. It is not game login; Google/Email does not create a wallet. A wallet response alone does not verify transaction finality.
 
-**Collectibles Contract Account** is the separate NFT account (`deepfish-contract.testnet`). **Merchant config** points to `dsh-merchant-v2.deepfish-owner.testnet` (deployed + verified on Testnet; see `docs/ONCHAIN_ECONOMY_PROOF.md`); v1 (`dsh-merchant-v1.deepfish-owner.testnet`) is superseded. Neither is a game balance.
+**Collectibles Contract Account** is the separate NFT account (`deepfish-contract.testnet`). **Merchant config** must be set to `dsh-merchant-v2.deepfish-owner.testnet` (deployed + verified on Testnet; see `docs/ONCHAIN_ECONOMY_PROOF.md`); the repo default is empty. v1 (`dsh-merchant-v1.deepfish-owner.testnet`) is superseded. Neither is a game balance.
 
 **Merchant NPC** is an automated backend buyer. It has needs, inventory, orders, and internal treasury. It is not a NEAR account and makes no blockchain transactions. It goes bankrupt when its available balance reaches its reserve floor: the shop closes (no quotes, sales, or orders) until a player invests CR into its treasury. The rule lives in `js/economy-rules.js` (`isMerchantBankrupt` / `reopenAmountNeeded`), closure is detected on sale and on market tick, and investment is a balanced ledger transaction (`merchant_investment`, player → merchant).
 
@@ -34,7 +34,7 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 Historical collectibles deployment details remain in `PROJECT_STATUS.md`; they do not verify merchant activity. Collectible page provides NFT/marketplace operations; unit/Sandbox tests do not prove player transactions on Testnet.
 
-A unique capture now links to a one-time mint two ways: operator auto-mint mints `fish:catch-{receipt}` on v2 Testnet (verified mint tx `39MA8pybrJbs7RiPwe71SzZ7sbJVXzZGPt69Xn2dq9gb`, see `docs/ONCHAIN_ECONOMY_PROOF.md` Merchant v2 — `2pqUogkLHs87YrPErYJAgoZ4Dp8WsjfPCPTncVh7SGwT` was the manual `mint_asset` of the test token `fish:test-fish-001`, not the auto-mint flow), and receipt-verified `mint_catch` mints `fish:{receipt}` from the player's session key (implemented locally, needs a redeploy — deployed v2 has no `mint_catch`). One merchant sale finalized on Testnet (`accept_purchase_order`); this does not link a game catch to a token sale — the sell/buy transfer leg is still missing. Mint metadata does not prove species, rarity, or capture. Capture rarity progression remains future work.
+A unique capture now links to a one-time mint two ways: operator auto-mint mints `fish:catch-{receipt}` on v2 Testnet (verified mint tx `39MA8pybrJbs7RiPwe71SzZ7sbJVXzZGPt69Xn2dq9gb`, see `docs/ONCHAIN_ECONOMY_PROOF.md` Merchant v2 — `2pqUogkLHs87YrPErYJAgoZ4Dp8WsjfPCPTncVh7SGwT` was the manual `mint_asset` of the test token `fish:test-fish-001`, not the auto-mint flow), and receipt-verified `mint_catch` mints `fish:{receipt}` from the player's session key (implemented locally, needs a redeploy — deployed v2 has no `mint_catch`). Three merchant sales finalized on Testnet (`accept_purchase_order`), including the sale of an auto-minted catch token on v2; but the off-chain CR sale and shop sales still have no transfer leg — the token does not move when a fish is sold for CR. Mint metadata does not prove species, rarity, or capture. Capture rarity progression remains future work.
 
 This review does not verify any Testnet listing, buy, or transfer. Check finalized RPC/Explorer status before claiming a transaction. New deployment, initialization, or funding requires owner approval.
 
@@ -46,7 +46,7 @@ This review does not verify any Testnet listing, buy, or transfer. Check finaliz
 - Capture identity and five-tier rarity: require design and implementation. One-time NFT mint is implemented (operator auto-mint verified on v2 Testnet; receipt-verified `mint_catch` local, needs redeploy).
 - On-chain settlement of player-shop sales (slice 3, the transfer leg): not built yet. The marketplace itself (backend + SHOPS tab UI, slices 1–2) is built — see `docs/MARKETPLACE_MOTHERSHIP.md`; shop sales settle off-chain in CR for now.
 - Deep Sea Hunter memecoin: future only, not MVP; no creation without owner approval.
-- Merchant NEP-245 compliance: unverified. Catch-backed minting is partly verified (operator auto-mint verified on v2 Testnet; receipt-verified `mint_catch` local only, needs a redeploy), and the confirmed Testnet trade flow covers one merchant sale — the sell/buy transfer leg and Testnet verification of the session-key path are still missing; see `../contracts/merchant/README.md`.
+- Merchant NEP-245 compliance: unverified. Catch-backed minting is partly verified (operator auto-mint verified on v2 Testnet; receipt-verified `mint_catch` local only, needs a redeploy), and the confirmed Testnet trade flow covers three merchant sales (v1 demo token, v2 order-1 sale, v2 catch token) — the sell/buy transfer leg and Testnet verification of the session-key path are still missing; see `../contracts/merchant/README.md`.
 
 ## Ledger flow
 

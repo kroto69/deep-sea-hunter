@@ -1,9 +1,7 @@
 # Deploying Deep Sea Hunter (third-party operator guide)
 
 This is the checklist for someone other than the original operator to deploy
-the game from scratch. It assumes the code is on branch
-`feat/auto-mint-merchant-agent` (push it to GitHub first — the branch does not
-exist on the remote until someone pushes it).
+the game from scratch. It assumes the code is on branch `main` (HEAD `f10eef3`, already on GitHub — `git ls-remote origin main` = `f10eef3`).
 
 What you are deploying: a static Three.js frontend, a Fastify + PostgreSQL
 API (the 60-second market tick runs in-process in the API), and a NEAR
@@ -14,7 +12,7 @@ hackathon prize payout, not for running the game.
 
 ## TL;DR for judges (30 seconds)
 
-1. Clone branch `feat/auto-mint-merchant-agent`.
+1. Clone branch `main`.
 2. Run `scripts/deploy-contract.sh` with three accounts (owner / merchant
    desk / treasury) — it tests, builds, deploys with `near-cli`, and
    optionally funds the treasury with `fund_treasury` (§4).
@@ -55,7 +53,7 @@ else in this project is a signing credential.
 
 | Secret | Where it lives | How to make it | What it is for |
 |---|---|---|---|
-| Merchant **owner private key** | `~/.near-credentials/testnet/<owner_id>.json` — created by `near login`. **Only on the operator's machine. Never in the repo, never in `.env`, never in chat.** | `near login` with the owner account | Signs everything the server does as owner: operator auto-mint (`mint_asset`), `set_settlement_key`, `fund_treasury`. The API reads it from that file when `NEAR_MERCHANT_OWNER_ID` is set and `AUTO_MINT_ENABLED=true`. |
+| Merchant **owner private key** | `~/.near-credentials/testnet/<owner_id>.json` — created by `near login`. **Only on the operator's machine. Never in the repo, never in `.env`, never in chat.** | `near login` with the owner account | Signs what the server does as owner: operator auto-mint (`mint_asset`) and merchant-agent purchase orders (`create_purchase_order`). The API reads it from that file when `NEAR_MERCHANT_OWNER_ID` is set (Testnet only); `AUTO_MINT_ENABLED=true` additionally gates the auto-mint caller. `set_settlement_key` and `fund_treasury` are manual owner-wallet calls, not server calls. |
 | `SETTLEMENT_SIGNING_KEY` | `.env` only (server side). **Never commit a real value.** | `node server/scripts/generate-settlement-key.mjs` (prints a fresh 64-hex ed25519 seed) | The server signs catch receipts with it (`POST /api/near/receipt-signature`). Whoever holds this seed can sign receipts — treat it like a private key. The matching public key is published on-chain once via `set_settlement_key` (see §4). |
 
 Public values (not secrets, safe to share and commit as examples):
@@ -66,6 +64,8 @@ Public values (not secrets, safe to share and commit as examples):
 they are credentials, just not signing keys), `ALLOWED_ORIGIN`.
 
 ## 3. Build the contract
+
+Run `npm ci` first (provides `wasm-opt` via the `binaryen` devDependency, required by `build-wasm.sh`).
 
 ```sh
 export RUSTUP_HOME=$HOME/workspace/tools/rustup CARGO_HOME=$HOME/workspace/tools/cargo PATH=$HOME/workspace/tools/cargo/bin:$PATH
@@ -88,8 +88,7 @@ redeploy checklist in `contracts/merchant/README.md`).
 ## 4. Deploy the contract (script)
 
 Run the deploy script — it checks prerequisites, runs the contract tests,
-builds the WASM (§3), asks before the paid deploy, verifies the account
-carries code afterwards, and prints the `.env` / Render values to set:
+builds the WASM (§3), asks before the paid deploy, runs `near state` afterwards and prints the explorer link so you can record the deploy hash from the log (it does not re-check for code after deploy — the no-code check runs before deploy), and prints the `.env` / Render values to set:
 
 ```sh
 scripts/deploy-contract.sh --contract-id <new-contract>.testnet \
@@ -97,16 +96,13 @@ scripts/deploy-contract.sh --contract-id <new-contract>.testnet \
   --treasury-id <treasury>.testnet --fund-near 5
 ```
 
-`--fund-near N` is optional (funds the treasury with N NEAR right after
-deploy); without it, fund later with the `near call` in the script's
-output. `--yes` skips the confirmation prompts — only for an
+`--fund-near N` is optional (funds the treasury with N NEAR right after deploy, after a second confirmation); without it, fund later with `near call <contract> fund_treasury '{}' --accountId <owner> --deposit N` — note the script only prints that command when `--fund-near` was passed and declined, not when it was omitted. `--yes` skips the confirmation prompts — only for an
 owner-attended run. Read the script before running it: it has never been
 executed live (see the honest limit in the TL;DR), and `near-cli` flag
 names differ between versions.
 
 Manual fallback (the same steps the script runs, if you prefer to type
-them). Install `near-cli` and log in as the owner first (this creates the
-credentials file from §2):
+them). Install `near-cli` and log in as the contract account first (this creates `~/.near-credentials/testnet/<merchant-contract-account>.json`, which the deploy signs with; the owner key from §2 is only needed for the funding and `set_settlement_key` calls). The contract account must already exist (Testnet faucet / wallet) before running the script — it exits if `near state` cannot read it.
 
 ```sh
 near deploy --accountId <merchant-contract-account> \
@@ -126,13 +122,18 @@ Then, as owner, two one-time calls:
 1. **Fund the on-chain treasury** — the contract pays seller claims from
    `native_treasury` (`treasury_available()` = treasury minus reserved
    orders, seller claims, and pending withdrawals). Call `fund_treasury`
-   with attached NEAR, e.g. 5 NEAR to start (the demo sale pays a 0.01 NEAR
-   seller claim per fish; size it to your expected volume). Owner-only.
+   with attached NEAR, e.g. 5 NEAR to start (a 20 CR fish pays a 0.01 NEAR seller claim — 1 CR = 0.0005 NEAR and the CR price is dynamic per species, 10–65 CR at seed, so size it to your expected volume). Owner-only.
 2. **Register the settlement key** (only if you run invisible settlement) —
    start the API first with `SETTLEMENT_SIGNING_KEY` set (§5), read the
    public key from `GET /api/near/settlement-key`, then call
    `set_settlement_key` with that public key as owner. One call; rotating
-   the key later is owner-only too.
+   the key later is owner-only too. The public key is the ed25519 hex
+   string returned by `GET /api/near/settlement-key`; the call attaches
+   exactly 1 yocto (`assert_one_yocto` in the contract):
+
+   ```sh
+   near call <merchant-contract-account> set_settlement_key '{"public_key":"<hex-pubkey-from-GET-/api/near/settlement-key>"}' --accountId <owner>.testnet --depositYocto 1
+   ```
 
 ## 5. Configure and run the backend
 
@@ -143,9 +144,7 @@ cp .env.example .env
 Fill in `.env`. The fields that most often trip people up:
 
 - `NEAR_MERCHANT_CONTRACT_ID` — fill in the deployed merchant contract
-  account (the line is in `.env.example`, empty by default). Without it
-  the NEAR tab and all merchant-chain endpoints return
-  `merchant_contract_not_configured` (503).
+  account (the line is in `.env.example`, empty by default). Without it the NEAR tab shows unconfigured and the merchant-chain state and transaction endpoints return `merchant_contract_not_configured` (503); the config endpoints report `enabled: false` instead.
 - `NEAR_MERCHANT_OWNER_ID` + `AUTO_MINT_ENABLED=true` — only together, and
   only if the owner key file from §2 exists on this machine. Leave
   `AUTO_MINT_ENABLED=false` (the default) if this server should not mint.
@@ -195,8 +194,7 @@ the not-yet-existing Render API — temporarily change it to
 
 ## 7. Verify end-to-end (do not skip)
 
-- `GET /ready` returns OK; `GET /api/near/config` shows the merchant
-  contract enabled.
+- `GET /ready` returns HTTP 200 `{"status":"ready","database":"ok"}`; `GET /api/near/config` shows `merchantEnabled` and the merchant contract id.
 - Play online as Guest: dive Coral, catch a fish, see the receipt in the
   Market tab, sell it for CR.
 - NEAR tab: connect a wallet → SYNC ON-CHAIN → a token appears (if
