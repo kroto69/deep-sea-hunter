@@ -30,7 +30,7 @@ export class OnlineGame {
     if(!this.token){const s=await this.post('/api/sessions/guest');this.token=s.token;sessionStorage.setItem('dsh.online.token',this.token);}
     try{await this.api('/api/sessions/me');}catch(error){if(error.message==='authentication_required'){this.token=null;sessionStorage.removeItem('dsh.online.token');}throw error;}
     this.pending=JSON.parse(sessionStorage.getItem(`dsh.online.pending.${this.token}`)||'[]');
-    await this.flush();await this.refresh();await this.newHunt();
+    await this.flush();await this.refresh();await this.newHunt();this.shops=null;
     this.walletId=null;
     walletAccount().then(id=>{this.walletId=id;window.dispatchEvent(new Event('dsh-wallet-change'));}).catch(()=>{});
     if(!this.active){this.offlineData=this.progression.data;this.offlineSave=this.progression.save;this.progression.data=new Progression({offline:false}).data;this.progression.save=()=>{};this.active=true;this.hub.onRefill?.();}
@@ -51,7 +51,7 @@ export class OnlineGame {
   offline(){
     if(this.flushing||this.pending.length)throw new Error('Sync pending catches before changing mode');
     if(this.active){this.progression.data=this.offlineData;this.progression.save=this.offlineSave;}
-    this.active=false;this.hunt=null;this.hub.tab='market';this.hub.onRefill?.();this.hub.render();
+    this.active=false;this.hunt=null;this.shops=null;this.hub.tab='market';this.hub.onRefill?.();this.hub.render();
   }
   async capture(spec){
     if(!this.active)return;
@@ -199,6 +199,17 @@ export class OnlineGame {
       if(action==='shop-mint')throw new Error('Mint disabled until online catch receipts can authorize minting.');
       if(action==='shop-sell'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);const t=this.onchain.tokens.find(x=>x.tokenId===id);if(!t?.order)throw new Error('No merchant order for this fish');await this.shopCall('accept_purchase_order',{order_id:t.order.id,amount:'1'});}
       if(action==='shop-withdraw'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);if(BigInt(this.onchain.sellerClaim||0)<=0n)throw new Error('No on-chain proceeds to withdraw');await this.shopCall('withdraw_proceeds',{});}
+      if(action==='shop-license'){const r=await this.post('/api/market/shops/license',{});await this.loadShops();await this.refresh();this.notice=`BOAT STALL LICENSED · ${r.price} CR`;this.hud.notify(this.notice);}
+      if(action==='shop-list'){
+        const input=this.hub.body.querySelector(`[data-price-for="${id}"]`);
+        const price=Number(input?.value);
+        if(!Number.isSafeInteger(price)||price<1||price>1000000000)throw new Error('Listing price must be 1–1000000000 CR');
+        const r=await this.post('/api/market/shops/list',{receiptId:id,price});
+        await this.loadShops();await this.refresh();this.notice=`LISTED · ${(r.speciesId||'fish').toUpperCase()} · ${r.price} CR`;this.hud.notify(this.notice);
+      }
+      if(action==='shop-delist'){await this.post('/api/market/shops/delist',{listingId:id});await this.loadShops();await this.refresh();this.notice='LISTING REMOVED · FISH BACK IN HOLD';this.hud.notify(this.notice);}
+      if(action==='shop-buy'){const r=await this.post('/api/market/shops/buy',{listingId:id});await this.loadShops();await this.refresh();this.notice=`BOUGHT · ${(r.speciesId||'fish').toUpperCase()} · ${r.price} CR`;this.hud.notify(this.notice);}
+      if(action==='shop-refresh'){await this.loadShops();await this.refresh();}
     }catch(error){this.showError(error);return false;}finally{this.busy=false;this.render();}
     return true;
   }
@@ -206,6 +217,12 @@ export class OnlineGame {
   autoSync(){
     if(!this.walletId||this.chainLoading)return;
     this.chainLoading=walletAccount().then(id=>{this.walletId=id;return id&&this.shopLoad();}).finally(()=>{this.chainLoading=null;if(this.hub.open)this.render();});
+  }
+  async loadShops(){
+    if(this.shopsLoading)return;this.shopsLoading=true;
+    try{this.shops=await this.api('/api/market/shops');this.error='';}
+    catch(error){this.shops=null;this.error=error.message;}
+    finally{this.shopsLoading=false;if(this.hub.open)this.render();}
   }
   async shopLoad(){
     this.onchain={...this.onchain,error:''};
@@ -233,6 +250,7 @@ export class OnlineGame {
   }
   render(){
     if(this.hub.tab==='chain'&&this.walletId&&!this.onchain?.contractId&&!this.onchain?.error)this.autoSync();
+    if(this.hub.tab==='shops'&&this.active&&!this.shops&&!this.shopsLoading)this.loadShops();
     if(!this.active&&this.hub.tab!=='chain'){this.offlineRender();return;}
     const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const button=(action,label,id='')=>`<button class="hub-btn" data-online="${action}" data-id="${esc(id)}" ${this.busy?'disabled':''}>${esc(label)}</button>`;
@@ -257,6 +275,7 @@ export class OnlineGame {
     document.getElementById('hub-wallet').textContent=this.walletId?'DISCONNECT WALLET':'CONNECT WALLET';
     let html=`<div class="market-feedback ${this.error?'is-error':this.notice?'is-success':''}" role="status">${this.busy?'Loading market…':esc(this.error||this.notice||'')}</div>`;
     if(this.hub.tab==='chain'&&!this.walletId){html+=`<div class="market-intro"><h3>NEAR Testnet</h3><p>Connect wallet to view and use on-chain merchant.</p>${button('wallet','CONNECT WALLET')}</div>`;this.hub.body.innerHTML=html;return;}
+    if(!this.active&&this.hub.tab==='shops'){html+=`<div class="market-intro"><h3>Mothership Marketplace</h3><p>Player shops live online: buy a 500 CR boat-stall license once, list your catch at your own price, and buy fish from other divers — all in CR. Listed fish count as market supply, so they push the merchant price down like merchant stock.</p>${button('connect','PLAY ONLINE GUEST')}</div>`;this.hub.body.innerHTML=html;return;}
     if(!this.active&&this.hub.tab!=='chain'){html+=`<div class="market-intro"><h3>Dock Merchant</h3><p>Online orders and credits use a separate Guest session. Offline catch stays in your saved game.</p>${button('connect','PLAY ONLINE GUEST')}</div>`;this.hub.body.innerHTML=html;return;}
     if(this.hub.tab==='economy'){
       html+='<h3>Economy loop</h3><p>BACKEND OFF-CHAIN: dive Coral, catch supported fish, sync, review orders, sell chosen fish. Merchant stock rises and treasury falls; next market tick recalculates prices and orders. Use unmet demand to plan the next dive.</p><p>NEAR TESTNET MERCHANT: wallet actions available in NEAR tab. Catches mint on-chain as NEP-245 tokens when server auto-mint is on or invisible settlement is approved; gameplay credits remain off-chain.</p>';
@@ -274,6 +293,40 @@ export class OnlineGame {
     else if(this.hub.tab==='missions')html+=`<h3>Missions</h3>${(this.missions||[]).map(m=>`<div class="hub-row"><div><b>${esc(m.name)}</b><small>${esc(m.progress)}/${esc(m.goal)} · ${esc(m.reward)} CR</small></div>${m.claimed?'<span class="hub-tag">PAID</span>':button('claim','CLAIM',m.id)}</div>`).join('')||'<p class="market-empty">No missions available.</p>'}`;
     else if(this.hub.tab==='records')html+=`<h3>Habitat population</h3>${(this.populations||[]).map(p=>`<div class="hub-row"><span>${esc(p.species_id)}</span><b>${esc(p.population_count)}/${esc(p.capacity)}</b></div>`).join('')}`;
     else if(this.hub.tab==='storage')html+=`<h3>Catch hold</h3><div class="market-list">${inventoryRows}</div>`;
+    else if(this.hub.tab==='shops'){
+      const shops=this.shops;
+      html+='<h3>Mothership Marketplace · player shops · OFF-CHAIN CR</h3><p>Listed fish count as market supply — a full shop board pushes the merchant price down, like merchant stock. A listing never fills merchant demand: a fish in a shop is a fish not sold to the merchant.</p>';
+      if(!shops){html+=`<p class="market-empty">${this.shopsLoading?'Loading shops…':'Shops unavailable.'}</p>${button('shop-refresh','RETRY')}`;}
+      else{
+        const balance=Number(this.profile?.balance??0);
+        const license=shops.license;
+        if(license?.active)html+=`<div class="hub-station"><span>BOAT STALL</span><b>LICENSED · BOAT</b></div><p class="hub-note">Licensed ${esc(new Date(license.acquired_at).toLocaleDateString())} · ${esc(license.price_paid)} CR · one-time, never expires.</p>`;
+        else{
+          html+=`<div class="hub-station"><span>BOAT STALL</span><b>NO LICENSE</b></div><p class="hub-note">One-time 500 CR boat-stall license — the CR sinks into the game treasury. No license, no listing.</p>`;
+          html+=balance>=500?`<div class="hub-quick">${button('shop-license','BUY BOAT STALL · 500 CR')}</div>`:`<p class="hub-note">You have ${esc(balance)} CR — need 500 CR for a license.</p>`;
+        }
+        const mine=shops.myListings||[];
+        html+='<h3>Your stall</h3>';
+        html+=mine.length?mine.map(l=>`<div class="market-row">${icon(l.species_id)}<div class="market-species"><b>${esc(l.species_name||l.species_id)}</b><small>listed ${esc(new Date(l.created_at).toLocaleDateString())}</small></div><div class="market-price"><b>${esc(l.price)} CR</b></div>${button('shop-delist','DELIST',l.id)}</div>`).join(''):'<p class="market-empty">Nothing listed yet.</p>';
+        if(license?.active){
+          const listedReceipts=new Set(mine.map(l=>l.receipt_id));
+          const listable=[...held].filter(([,group])=>group.some(r=>!listedReceipts.has(r.id)));
+          html+='<h3>List a fish</h3><p class="hub-note">Set your price in CR per fish — prefilled with what the merchant currently pays.</p>';
+          html+=listable.length?listable.map(([id,group])=>{
+            const o=orderFor(id),prefill=o&&offer(o)?Number(o.unit_price):o?Number(o.base_price||20):20;
+            const r=group.find(x=>!listedReceipts.has(x.id));
+            return `<div class="market-row">${icon(id)}<div class="market-species"><b>${esc(o?.name||id)}</b><small>${group.length} available${o?` · merchant pays ${esc(o.unit_price)} CR`:''}</small></div><input class="shop-price" type="number" min="1" max="1000000000" step="1" value="${prefill}" data-price-for="${esc(r.id)}" aria-label="Listing price in CR for ${esc(o?.name||id)}">${button('shop-list','LIST',r.id)}</div>`;
+          }).join(''):'<p class="market-empty">No listable fish — catch something first, or everything is already listed.</p>';
+        }
+        const all=shops.listings||[],myIds=new Set(mine.map(l=>l.id));
+        html+='<h3>Market board</h3>';
+        html+=all.length?all.map(l=>{
+          const mineRow=myIds.has(l.id);
+          return `<div class="market-row">${icon(l.species_id)}<div class="market-species"><b>${esc(l.species_name||l.species_id)}</b><small>seller ${esc(String(l.seller_id).slice(0,8))}… · listed ${esc(new Date(l.created_at).toLocaleDateString())}</small></div><div class="market-price"><b>${esc(l.price)} CR</b></div>${mineRow?'<span class="order-state">YOUR STALL</span>':balance>=Number(l.price)?button('shop-buy','BUY',l.id):'<span class="order-state">NEED CR</span>'}</div>`;
+        }).join(''):'<p class="market-empty">No fish on the market yet — be the first stall.</p>';
+        html+=`<div class="hub-quick">${button('shop-refresh','SYNC SHOPS')}</div>`;
+      }
+    }
     else if(this.hub.tab==='chain'){
       const c=this.onchain||{},near=v=>{const n=BigInt(v||0);return `${n/10n**24n}.${(n%10n**24n).toString().padStart(24,'0').slice(0,5)}`;};
       const tx=c.lastTx,link=h=>`<a href="https://testnet.nearblocks.io/txns/${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(h)}</a>`;

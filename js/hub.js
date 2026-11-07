@@ -110,6 +110,9 @@ export class Hub {
       html += `<button class="hub-btn wide" data-action="sell" ${total ? '' : 'disabled'}>SELL CATCH · ${total} CR</button>`;
       html += `<details><summary>Fish price list</summary>${Object.entries(FISH_PRICES).map(([id, price]) => `<div class="hub-row"><span>${id.toUpperCase()}</span><span>${price} CR</span></div>`).join('')}</details>`;
       html += '<p class="hub-note">Offline sale history was not stored in existing save. Online transactions appear under ONLINE / NEAR.</p>';
+    } else if (this.tab === 'shops') {
+      html += '<div class="hub-station"><span>MOTHERSHIP MARKETPLACE</span><b>PLAYER SHOPS</b></div>';
+      html += '<p class="hub-note">Player shops live online: buy a 500 CR boat-stall license once, list your catch at your own price, and buy fish from other divers — all in CR. Listed fish count as market supply, so a full shop board pushes the merchant price down. Play online to use them.</p>';
     } else if (this.tab === 'equipment') {
       html += '<div class="hub-station"><span>EQUIPMENT SHOP</span><b>DECK SUPPLIES</b></div>';
       html += `<button class="hub-btn wide" data-action="refill">REFILL OXYGEN · NO CHARGE</button>`;

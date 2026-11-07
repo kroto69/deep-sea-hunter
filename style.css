@@ -372,6 +372,8 @@ html, body {
 .market-progress i { display: block; height: 100%; background: #5bb7aa; transition: width .3s ease; }
 .market-price { display: grid; gap: 4px; text-align: right; white-space: nowrap; }
 .market-row .hub-btn { min-height: 38px; padding: 8px 13px; background: #8bd8c6; }
+.shop-price { width: 92px; flex: none; min-height: 38px; padding: 8px; border: 1px solid rgba(120,220,255,.35); border-radius: 6px; background: #0a2e3d; color: #eafcff; font: bold 13px 'Segoe UI', Arial, sans-serif; text-align: right; }
+.shop-price:focus-visible { outline: 2px solid #8be4d0; outline-offset: 2px; }
 .order-state { color: #748d96; font: 8px monospace; letter-spacing: .5px; text-align: right; }
 .is-near .order-state { color: #e2bd78; }
 .market-history { margin-top: 16px; }

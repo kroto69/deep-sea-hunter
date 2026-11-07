@@ -1,9 +1,10 @@
 # Mothership marketplace — player shops inside the lobby hub
 
-Status: SLICE 1 IMPLEMENTED LOCALLY (2026-11-07). Backend only: license,
-listings, escrow, player-to-player sale, and the supply rule. No hub UI yet
-(slice 2), no on-chain settlement yet (needs the server receipt-signing
-endpoint from `docs/SETTLEMENT_SESSION_KEYS.md`). Not deployed, not verified
+Status: SLICE 1 (backend) + SLICE 2 (hub UI) IMPLEMENTED LOCALLY (2026-11-07). Backend: license,
+listings, escrow, player-to-player sale, and the supply rule. Hub UI: SHOPS
+tab in the Boat Hub (license buy, list at own price, delist, buy, market
+board). No on-chain settlement yet (needs the transfer leg — slice 3; the
+server receipt-signing endpoint already exists). Not deployed, not verified
 on Testnet. DB integration tests are written but need `TEST_DATABASE_URL`.
 
 ## The concept (owner, 2026-11-07)
@@ -93,10 +94,10 @@ claim shop sales settle on-chain.
 
 ## What is NOT in slice 1
 
-- Hub UI (slice 2): the marketplace tab, my-shop panel, browse/buy buttons.
+- Hub UI — DONE 2026-11-07 (slice 2): SHOPS tab in the Boat Hub — license panel, my-stall panel with delist, list-at-own-price (prefilled with the merchant's current price), market board with buy. Offline shows an online-only note.
 - Fast Forward shop simulation.
 - License NFT mint, shop tiers, fees, shop search/ranking.
-- The server receipt-signing endpoint (shared blocker with settlement).
+- On-chain settlement of shop sales (slice 3): transfer leg not built; the receipt-signing endpoint already exists.
 
 ## Test evidence
 
