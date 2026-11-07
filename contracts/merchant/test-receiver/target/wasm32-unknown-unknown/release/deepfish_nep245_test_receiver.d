@@ -1,0 +1,1 @@
+/home/oiroot/Dokumen/skate-demo/deepfish/contracts/merchant/test-receiver/target/wasm32-unknown-unknown/release/deepfish_nep245_test_receiver.wasm: /home/oiroot/Dokumen/skate-demo/deepfish/contracts/merchant/test-receiver/src/lib.rs

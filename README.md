@@ -7,10 +7,10 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 | Area | Status | What this means |
 |---|---|---|
 | Gameplay and existing Hub tabs | DONE / TESTED | Existing Three.js gameplay, controls, progression and Guest save remain. Automated coverage is headless only. |
-| Fast Forward | SIMULATED / TESTED | Seven local simulated days; does not mutate save, backend or chain. |
+| Fast Forward | SIMULATED / TESTED | Seven local simulated days in one minute; does not mutate save, backend or chain. |
 | Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices and merchant demand. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
 | NEAR merchant | ON-CHAIN SELL VERIFIED / COMPLIANCE INCOMPLETE | Testnet `accept_purchase_order` finalized; hash and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled; NEP-245 blockers remain. |
-| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Fresh local WASM build and Sandbox economy flow pass; receiver/storage/compliance blockers remain. Do not claim compliance. |
+| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite (46), Sandbox economy and adversarial receiver transfer-call checks pass locally; storage accounting and broader compliance review remain. Deployed WASM is older. Do not claim compliance. |
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders only. No identity provider or email delivery. Guest remains playable. |
 | Existing collectibles NFT | DONE / TESTED (historical deployment only) | Separate deployed NFT contract; does not prove merchant trades. Not modified here. |
 
@@ -67,6 +67,12 @@ node tests/fast-forward.test.mjs
 ```
 
 `tests/boat-hub.mjs` is stale against current Hub tabs and currently fails waiting for `[data-tab="economy"]`; do not count it as passing coverage. `tests/wallet-login.mjs` uses mock wallet behavior; it does not prove a real login or signature. Browser sizes include desktop and 844×390 mobile landscape. Physical-device performance is UNVERIFIED.
+
+## Track 09 game loop
+
+- **~30 seconds:** dive target habitat, catch fish with oxygen/ammo constraints, return with server-validated receipt.
+- **~5 minutes:** backend market tick updates populations, stock/demand prices and treasury-bounded merchant orders. Choose sale or hold, then plan next dive from `WHY THIS PRICE?` reasoning.
+- **Per session:** complete dives and sales, earn off-chain CR, buy progression, inspect merchant inventory/treasury/history. Fast Forward previews seven simulated days in one minute locally; it is not a live economic tick.
 
 ## Demo economy and NEAR tab
 

@@ -2,11 +2,17 @@
 
 Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, catch fish, manage oxygen/equipment, and return to the Boat Hub. It has an offline Guest save and an Online Guest backend; online credits are separate from local saves.
 
+## Track 09 game loop
+
+- **Every ~30 seconds:** dive a requested habitat, catch fish while managing oxygen/ammo, then return with a validated catch receipt. Server checks cooldown, population, species quota, and duplicate shot IDs.
+- **Every ~5 minutes:** market tick recalculates stock/demand prices, expires old orders, creates treasury-bounded buy orders, and regenerates habitat populations. Player chooses whether to sell now for CR or hold inventory and target scarce/high-demand species next dive.
+- **Per session:** review price reasoning, complete several dives and sales, buy progression upgrades, inspect merchant stock/treasury/history, and compare market outcomes. Fast Forward previews seven simulated days in one minute; it is local-only and does not alter online economy or chain.
+
 ## Current features
 
 - Underwater gameplay, fish behavior, speargun, oxygen, progression, and tutorial are available.
 - Boat Hub includes Fish Market, Equipment, Missions, Dive Zones, and progression records.
-- Online demo supports catching all 19 fish in `js/fish.js`. Each fish has its own seeded base price and merchant demand. Depleted demand lowers price on a later market tick.
+- Online demo supports catching all 19 fish in `js/fish.js`. Each fish has its own seeded base price and merchant demand. Depleted demand lowers price on a later market tick; Fast Forward previews a separate seven-day simulation in one minute.
 - Dock Merchant validates catch receipts; selling raises merchant stock, reduces demand and merchant treasury, and raises Player Balance. All CR/accounting stays PostgreSQL off-chain.
 - Browser checks are documented for desktop `1280×720` and mobile landscape `844×390`. They do not prove real-phone FPS or performance.
 

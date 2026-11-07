@@ -2,7 +2,7 @@ import { Progression, ZONES } from './progression.js';
 import { FISH_SPECIES } from './fish.js';
 import { nextPrice } from './economy-rules.js';
 import { testnetWallet, walletAccount, functionCallAction } from './wallet.js';
-// ponytail: 0.009 NEAR covers observed 0.0086 NEAR seller requirement with 0.0004 NEAR headroom; re-measure before supporting larger token sets.
+// ponytail: 0.009 NEAR covers measured seller storage plus callback reserve; re-measure before supporting larger token sets.
 const SELLER_STORAGE='9000000000000000000000';
 // Separate online session; never import local save balances or inventory.
 export class OnlineGame {
@@ -193,6 +193,7 @@ export class OnlineGame {
       else{
         const lowStorage=BigInt(c.storage?.total||0)<BigInt(SELLER_STORAGE);
         html+=`<p><small>CONTRACT</small> ${esc(c.contractId)} · <small>ACCOUNT</small> ${esc(c.accountId)}</p>`;
+        html+=`<p class="hub-note">NEP-245 merchant flow pending Sandbox/runtime validation. Token sale requires wallet signature and gas; gameplay credits remain off-chain.</p>`;
         html+=`<div class="market-metrics"><div><small>FISH TOKENS</small><strong>${c.tokens.length}</strong></div><div><small>SALE PROCEEDS</small><strong>${near(c.sellerClaim)} <em>NEAR</em></strong></div><div><small>STORAGE DEPOSIT</small><strong>${near(c.storage?.total)} <em>NEAR</em></strong></div></div>`;
         html+=c.tokens.map(t=>`<div class="market-row"><div class="market-species"><b>${esc(t.title)}</b><small>${esc(t.tokenId)}</small></div><div class="market-price"><b>${t.order?`${near(t.order.unitPrice)} NEAR`:'—'}</b><small>${t.order?'merchant order':'no order'}</small></div>${t.order&&!lowStorage?button('shop-sell','SELL',t.tokenId):`<span class="order-state">${t.order?'NEED STORAGE':'WAITING'}</span>`}</div>`).join('')||'<p class="market-empty">No fish tokens on this account.</p>';
         html+=`<div class="hub-quick">${button('shop-refresh','SYNC ON-CHAIN')}${lowStorage?button('shop-storage',`STORAGE DEPOSIT ${near(BigInt(SELLER_STORAGE)-BigInt(c.storage?.total||0))} NEAR`):''}${!lowStorage?'<p class="hub-note">Mint unlocks after receipt-backed on-chain flow is ready.</p>':''}${c.sellerClaim!=='0'?button('shop-withdraw','WITHDRAW NEAR'):''}</div>`;

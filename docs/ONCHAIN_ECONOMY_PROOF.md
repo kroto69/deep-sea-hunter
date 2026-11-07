@@ -24,7 +24,9 @@ Failed first sale attempt:
 - Explorer: https://explorer.testnet.near.org/transactions/7uUEPRed84uDBtX9RsjHw5BWbm7rizUjPrVgCBiYQCtb
 - RPC confirmed atomic rollback: seller token remains 1, merchant token 0, claim 0, order active. Gas fee was charged.
 
-This verifies one actual Testnet storage deposit and one successful merchant sale—not general NEP-245 compliance, deployed/local byte-for-byte equivalence beyond recorded receipt code hash, production readiness, or another method. Do not retry settled order; it is filled. Backend game credits remain PostgreSQL off-chain. Existing `deepfish-contract.testnet` is a separate collectibles contract.
+A fresh read-only `view_code` at block `276587398` fetched deployed WASM. Its SHA-256 is `4a8560e1672b47b6912c12f82d7b708d0a7c6e41ab939c5c07470bd41f7cf1ad`; NEAR code hash is `61u8Z12Pi1AcbekbvAEst7jp4Am2JJLG7JG2baMmZLRJ`, matching sale receipt code hash. Current local rebuilt WASM SHA-256 is `e134c5a7dfd86d949c6a9652ea1c32242e902490b51fdf8dd09662c01b1519b9`; bytes differ because local code includes un-deployed resolver/storage changes. No new code was deployed.
+
+This verifies one actual Testnet storage deposit and one successful merchant sale—not general NEP-245 compliance, deployed/local byte-for-byte equivalence, production readiness, or another method. Do not retry settled order; it is filled. Backend game credits remain PostgreSQL off-chain. Existing `deepfish-contract.testnet` is a separate collectibles contract.
 
 ## Verification after explicit authorization
 

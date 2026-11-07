@@ -4,9 +4,9 @@
 
 - Gameplay, controls, progression, Guest save and existing Boat Hub tabs passed headless desktop/mobile browser checks. Physical-device performance is UNVERIFIED.
 - Offline Guest uses browser `dsh.save.v2`. Online Guest uses Fastify/PostgreSQL. They remain separate.
-- Online demo economy accepts all 19 fish in `js/fish.js`; per-fish base prices and merchant demand are seeded in PostgreSQL. Receipts, stock, demand, and CR settlement stay off-chain. Unit and isolated PostgreSQL integration tests pass.
-- Fast Forward is SIMULATED locally. It changes no save, backend row or blockchain state.
-- NEAR tab exposes merchant state, storage deposit, sell, and withdrawal calls against configured Testnet merchant. Returned hashes are labelled SUBMITTED · FINALITY UNVERIFIED until finality and RPC state are checked. One Testnet sale is independently verified; evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint remains disabled; NEP-245 compliance is unverified.
+- Online economy: browser gets an Online Guest session from Fastify; catches submit hunt/shot IDs and species, which server validates against cooldown, population and quotas before issuing receipts in PostgreSQL. Market reads receipts, open orders and prices; sale atomically marks receipt sold, credits player CR, debits merchant treasury, and updates stock, demand and ledger. All persistence is PostgreSQL; CR is off-chain and never converts to NEAR. Requires reachable API and PostgreSQL.
+- Fast Forward is SIMULATED locally: seven days in one minute. It changes no save, backend row or blockchain state. Track 09 loop: ~30-second dive/catch cycles; ~5-minute population/market ticks; per-session sale, progression and market-history decisions.
+- NEAR tab exposes merchant state, storage deposit, sell, and withdrawal calls against configured Testnet merchant. UI asks wallet to sign, then checks transaction signer, receiver, method, finality and merchant receipts through Testnet RPC; state requires `SYNC ON-CHAIN`. One sale is independently verified; evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint remains disabled; NEP-245 compliance is unverified.
 - Google/Email identity is NOT IMPLEMENTED. Disabled controls do not authenticate. Guest remains playable.
 
 ## NEAR boundaries
@@ -22,10 +22,13 @@ Cross-contract receiver behavior lacks runtime receiver integration. Event JSON 
 ## Data flow
 
 ```text
-Offline Guest → browser save → local Fish Market
-Online Guest → Fastify session → PostgreSQL receipts/merchant → off-chain credits
-Optional wallet → explicit NEAR signing → separate deployed NFT or future authorized merchant contract
-Fast Forward → local deterministic state → display only
+Offline Guest → browser local save → offline Fish Market
+Online Guest → Fastify session → validated catch → PostgreSQL receipt
+  → market quote/order → atomic sale → player CR + merchant treasury/stock/demand/ledger (off-chain)
+NEAR tab → Testnet wallet signature → merchant contract → RPC finality/receipt check → sync contract state
+Fast Forward → local deterministic simulation → display only
 ```
+
+Public demo note: static Vercel hosting serves game files only. Online economy needs publicly hosted API and PostgreSQL; Testnet actions also need configured merchant account and a user's Testnet wallet.
 
 See `README.md` for run commands, `ROADMAP.md` for blockers, and `docs/ONCHAIN_ECONOMY_PROOF.md` for evidence rules.
