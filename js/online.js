@@ -1,3 +1,4 @@
+import { API_BASE } from './api-config.js';
 import { Progression, ZONES } from './progression.js';
 import { FISH_SPECIES } from './fish.js';
 import { nextPrice, reopenAmountNeeded } from './economy-rules.js';
@@ -9,7 +10,7 @@ const SELLER_STORAGE='9000000000000000000000';
 export class OnlineGame {
   constructor({hub,progression,hud,fishSystem,camera,environment}) {
     Object.assign(this,{hub,progression,hud,fishSystem,camera,environment});
-    this.base=document.querySelector('meta[name="deepfish-api"]')?.content||'http://127.0.0.1:3000';
+    this.base=API_BASE;
     this.token=sessionStorage.getItem('dsh.online.token');this.active=false;this.busy=false;this.error='';this.pending=[];
     hub.online=this;
     const render=hub.render.bind(hub);this.offlineRender=()=>{render();document.getElementById('hub-account').textContent=this.walletId||'';document.getElementById('hub-wallet').textContent=this.walletId?'DISCONNECT WALLET':'CONNECT WALLET';};hub.render=()=>{if(this.active||['online','chain'].includes(hub.tab))this.render();else this.offlineRender();};

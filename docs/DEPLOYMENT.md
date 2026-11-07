@@ -15,21 +15,23 @@ hackathon prize payout, not for running the game.
 ## TL;DR for judges (30 seconds)
 
 1. Clone branch `feat/auto-mint-merchant-agent`.
-2. Build the contract (`contracts/merchant/build-wasm.sh`), deploy it with
-   `near-cli` under three accounts (owner / merchant desk / treasury), then
-   fund it with `fund_treasury`.
+2. Run `scripts/deploy-contract.sh` with three accounts (owner / merchant
+   desk / treasury) — it tests, builds, deploys with `near-cli`, and
+   optionally funds the treasury with `fund_treasury` (§4).
 3. Put two secrets in place: the owner key (`~/.near-credentials`, via
    `near login`) and a fresh `SETTLEMENT_SIGNING_KEY` in `.env`.
 4. `npm ci`, Postgres up, `npm run migrate`, `npm run seed`, `npm start`.
-5. Render Blueprint from the repo, fill `ALLOWED_ORIGIN`, fix the two
-   hardcoded API URLs if Render renames the service.
+5. Render Blueprint from the repo, fill `ALLOWED_ORIGIN`; if Render
+   renames the service, fix the one API URL in `js/api-config.js`.
 6. Verify: Guest catch → sell for CR → NEAR tab sell to FINAL → withdraw.
 
 Everything below is the same six steps with the exact commands, the
 gotchas, and the security rules. Honest limit: steps 2, 3, and 5 have not
 been executed end-to-end from this guide yet — they are grounded in the
 code, not in a live run — so expect small differences (e.g. `near-cli`
-flag names between versions) and report them back.
+flag names between versions) and report them back. The deploy script in
+§4 is in the same boat: it has never run live (no near-cli or Testnet
+accounts in this repo's sandbox), so read it before running.
 
 ## 1. NEAR accounts to create (Testnet faucet)
 
@@ -83,11 +85,28 @@ Fresh deploy vs redeploy over live state: the current struct gained
 older build can corrupt state — check Borsh compatibility first (see the
 redeploy checklist in `contracts/merchant/README.md`).
 
-## 4. Deploy the contract (near-cli)
+## 4. Deploy the contract (script)
 
-Install `near-cli` and log in as the owner (this creates the credentials
-file from §2). Then deploy. Exact flags differ between near-cli versions —
-check `near deploy --help` on yours; the shape is:
+Run the deploy script — it checks prerequisites, runs the contract tests,
+builds the WASM (§3), asks before the paid deploy, verifies the account
+carries code afterwards, and prints the `.env` / Render values to set:
+
+```sh
+scripts/deploy-contract.sh --contract-id <new-contract>.testnet \
+  --owner-id <owner>.testnet --merchant-id <desk>.testnet \
+  --treasury-id <treasury>.testnet --fund-near 5
+```
+
+`--fund-near N` is optional (funds the treasury with N NEAR right after
+deploy); without it, fund later with the `near call` in the script's
+output. `--yes` skips the confirmation prompts — only for an
+owner-attended run. Read the script before running it: it has never been
+executed live (see the honest limit in the TL;DR), and `near-cli` flag
+names differ between versions.
+
+Manual fallback (the same steps the script runs, if you prefer to type
+them). Install `near-cli` and log in as the owner first (this creates the
+credentials file from §2):
 
 ```sh
 near deploy --accountId <merchant-contract-account> \
@@ -159,20 +178,20 @@ curl http://127.0.0.1:3000/ready
    the Render dashboard if you want invisible settlement / auto-mint.
 4. After the first deploy, run `npm run seed` once in the Render Shell if
    you did not seed already.
-5. **Check the real API URL.** The frontend hardcodes the API base in two
-   places — `index.html` (meta `deepfish-api`) and `js/collectibles.js:2`.
-   If Render renamed the API service (name already taken), fix those two
-   lines to the real URL, commit, and redeploy.
+5. **Check the real API URL.** The frontend reads the API base from exactly
+   one place — `js/api-config.js` (both the game and the collectibles page
+   import it). If Render renamed the API service (name already taken), fix
+   that one line to the real URL, commit, and redeploy.
 
 Free-plan trap: a free Web Service sleeps after ~15 minutes idle, which
 stops the 60-second market tick and makes the first request slow. Use the
 Starter plan for judging/demo. Free Postgres: 1 GB, 90 days.
 
 Local alternative (for testing only): `npm run dev` for the API plus
-`python3 -m http.server 8080` in the repo root for the game. Trap: the
-`deepfish-api` meta in `index.html` points at the not-yet-existing Render
-API — temporarily change it to `http://127.0.0.1:3000` (or delete it) and
-**do not commit that change**. Same for `js/collectibles.js:2`.
+`python3 -m http.server 8080` in the repo root for the game (or just
+`./run.sh`, which starts everything). Trap: `js/api-config.js` points at
+the not-yet-existing Render API — temporarily change it to
+`http://127.0.0.1:3000` and **do not commit that change**.
 
 ## 7. Verify end-to-end (do not skip)
 
