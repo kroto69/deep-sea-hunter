@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="deepfish-api" content="https://deep-sea-hunter-api.onrender.com">
+<title>Collectibles · Deep Sea Hunter</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { background: #0b2b33; color: #e8f3f0; font-family: system-ui, sans-serif; margin: 0; padding: 24px 16px 64px; }
+  main { max-width: 760px; margin: 0 auto; }
+  a { color: #8bd8c6; }
+  h1 { font-size: 22px; margin: 4px 0 2px; letter-spacing: .04em; }
+  .sub { color: #9db8b2; font-size: 13px; margin: 0 0 16px; }
+  .card { background: #16414a; border-left: 4px solid #e9ba64; padding: 14px; margin: 12px 0; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: #ffe9a0; letter-spacing: .06em; }
+  .card p { font-size: 13px; line-height: 1.5; margin: 6px 0; }
+  label { display: block; font-size: 12px; color: #9db8b2; margin: 10px 0 4px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 10px; font-size: 14px; background: #0b2b33; color: #e8f3f0; border: 1px solid #3a6a72; border-radius: 4px; }
+  fieldset { border: 0; padding: 0; margin: 0; }
+  fieldset:disabled button { opacity: .45; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button { padding: 10px 14px; font-size: 13px; background: #8bd8c6; color: #0b2b33; border: 0; border-radius: 4px; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #0b2b33; padding: 10px; border-radius: 4px; margin: 8px 0 0; }
+  #status { font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="index.html">← Back to game</a></p>
+  <h1>COLLECTIBLES · NEAR TESTNET</h1>
+  <p class="sub">NEP-245 collectibles on the separate contract <span id="identity">…</span>. Testnet only — no real NEAR moves here, and offline fish/credits are not blockchain assets.</p>
+  <p id="status" role="status">Loading…</p>
+
+  <div class="card">
+    <h2>WALLET</h2>
+    <p id="wallet-account">Wallet: not connected</p>
+    <label for="wallet-provider">Wallet provider</label>
+    <select id="wallet-provider">
+      <option value="meteor-wallet">Meteor Wallet</option>
+      <option value="my-near-wallet">MyNearWallet</option>
+      <option value="here-wallet">HERE Wallet</option>
+    </select>
+    <fieldset id="actions">
+      <div class="row">
+        <button type="button" data-action="connect">CONNECT WALLET</button>
+        <button type="button" data-action="disconnect">DISCONNECT</button>
+      </div>
+    </fieldset>
+    <p>Verify the matching Testnet wallet in the game first — the page refuses to transact until the in-game wallet account matches.</p>
+  </div>
+
+  <div class="card">
+    <h2>TOKEN</h2>
+    <label for="token">Collectible ID (collectible-…)</label>
+    <input id="token" type="text" placeholder="collectible-fish-demo-0001" autocomplete="off">
+    <fieldset id="actions-lookup">
+      <div class="row">
+        <button type="button" data-action="lookup">LOOKUP</button>
+        <button type="button" data-action="register">REGISTER STORAGE</button>
+        <button type="button" data-action="withdraw">WITHDRAW</button>
+        <button type="button" data-action="unregister">UNREGISTER</button>
+      </div>
+    </fieldset>
+    <pre id="detail">No token looked up yet.</pre>
+  </div>
+
+  <div class="card">
+    <h2>LISTING</h2>
+    <label for="price">Price (test NEAR, &gt;0 and ≤1000)</label>
+    <input id="price" type="text" inputmode="decimal" placeholder="0.01">
+    <label for="receiver">Transfer to (…​.testnet or 64-hex implicit account)</label>
+    <input id="receiver" type="text" placeholder="alice.testnet" autocomplete="off">
+    <div class="row">
+      <button type="button" data-action="list">LIST · 24H</button>
+      <button type="button" data-action="delist">DELIST</button>
+      <button type="button" data-action="buy">BUY LISTED</button>
+      <button type="button" data-action="transfer">TRANSFER</button>
+    </div>
+    <p>Listings expire after 24 hours. Never infer settlement from the wallet return alone — sync and check the final on-chain status below.</p>
+  </div>
+
+  <div class="card">
+    <h2>ON-CHAIN TRANSACTIONS</h2>
+    <div class="row">
+      <button type="button" id="sync" data-action="sync">SYNC ON-CHAIN</button>
+    </div>
+    <pre id="transactions">Not synced yet.</pre>
+  </div>
+
+  <div class="card">
+    <h2>CONTRACT METADATA</h2>
+    <pre id="metadata">Not loaded yet.</pre>
+  </div>
+</main>
+<script type="module" src="js/collectibles.js"></script>
+</body>
+</html>

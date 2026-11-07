@@ -61,7 +61,7 @@ services:
   - type: static
     name: deep-sea-hunter
     plan: free
-    buildCommand: mkdir -p dist && cp index.html style.css dist/ && cp -r js dist/
+    buildCommand: mkdir -p dist && cp index.html collectibles.html style.css dist/ && cp -r js dist/
     staticPublishPath: ./dist
 
 databases:
