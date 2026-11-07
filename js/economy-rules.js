@@ -1,5 +1,11 @@
 export const PRICE_LIMITS = Object.freeze({ min: 1, maxMultiplier: 3, maxTickDeltaBps: 1000 });
 
+// Mothership marketplace, slice 1 (docs/MARKETPLACE_MOTHERSHIP.md): one shop
+// tier — a boat stall inside the lobby hub. The license costs 500 CR, same
+// order as a zone unlock (400 CR): roughly 28 clownfish sales. One place to
+// tune it; the CR goes to the game treasury as a sink, not to the merchant.
+export const SHOP_LICENSE_PRICE_CR = 500;
+
 // Merchant bankruptcy (Track 09: "if a merchant goes broke, it closes its shop
 // until someone invests in it"). One rule, shared by server, ticks and Fast Forward:
 // a merchant is broke when its available balance has fallen to its reserve floor,
@@ -39,8 +45,10 @@ export function nextPrice({ basePrice, marketStock, targetStock, demand, populat
   const reasons = [];
   if (scarcityBps >= 5_000) reasons.push('habitat population scarce');
   else if (scarcityBps <= 2_000) reasons.push('habitat population abundant');
-  if (stockPressureBps > 0) reasons.push('merchant stock below target');
-  else if (stockPressureBps < 0) reasons.push('merchant stock above target');
+  // marketStock is merchant stock PLUS active player-shop listings of the
+  // species (docs/MARKETPLACE_MOTHERSHIP.md): one market, one price signal.
+  if (stockPressureBps > 0) reasons.push('market stock below target');
+  else if (stockPressureBps < 0) reasons.push('market stock above target');
   if (demand === 0) reasons.push('merchant demand exhausted');
   else if (demandBps > 0) reasons.push('merchant demand');
   return { price, targetPrice: target, factors: { scarcityBps, stockPressureBps, demandBps, multiplierBps }, reason: reasons.join('; ') || 'balanced supply and demand' };

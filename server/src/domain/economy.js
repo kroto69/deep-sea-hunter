@@ -1,4 +1,4 @@
-export { PRICE_LIMITS, nextPrice, isMerchantBankrupt, reopenAmountNeeded } from '../../../js/economy-rules.js';
+export { PRICE_LIMITS, SHOP_LICENSE_PRICE_CR, nextPrice, isMerchantBankrupt, reopenAmountNeeded } from '../../../js/economy-rules.js';
 
 // Existing constant regeneration retained for compatibility with earlier callers.
 export function regeneration({ population, capacity, regenPerHourMilli, remainderNano = 0, elapsedMs, healthPpm = 1_000_000 }) {

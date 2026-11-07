@@ -1,4 +1,4 @@
-import { quote, sell, invest } from '../services/market.js';
+import { quote, sell, invest, buyLicense, listFish, delistFish, buyFromShop, listShops } from '../services/market.js';
 import { missions, upgrade, claim, unlockZone, conservation } from '../services/player.js';
 const uuid={type:'string',format:'uuid'};
 const slug={type:'string',pattern:'^[a-z0-9_-]{1,80}$'};
@@ -19,6 +19,11 @@ export async function economyRoutes(app) {
   app.get('/api/market/quotes',{...auth,schema:{querystring:body({receiptId:uuid})}},r=>quote(app.pg,r.player,r.query.receiptId));
   post('/api/market/sell',{quoteId:uuid},r=>sell(app.pg,r.player,r.body.quoteId,key(r)));
   post('/api/market/invest',{merchantId:slug,amount:{type:'integer',minimum:1,maximum:1000000000}},r=>invest(app.pg,r.player,r.body.merchantId,r.body.amount,key(r)));
+  app.get('/api/market/shops',auth,async r=>listShops(app.pg,id(r)));
+  post('/api/market/shops/license',{},r=>buyLicense(app.pg,r.player,key(r)));
+  post('/api/market/shops/list',{receiptId:uuid,price:{type:'integer',minimum:1,maximum:1000000000}},r=>listFish(app.pg,r.player,r.body.receiptId,r.body.price,key(r)));
+  post('/api/market/shops/delist',{listingId:uuid},r=>delistFish(app.pg,r.player,r.body.listingId,key(r)));
+  post('/api/market/shops/buy',{listingId:uuid},r=>buyFromShop(app.pg,r.player,r.body.listingId,key(r)));
   app.get('/api/market/orders',auth,async()=>(await app.pg.query(`SELECT d.species_id,s.name,s.base_price,p.population_count,p.capacity,d.desired_quantity,i.quantity AS stock,
     (SELECT a.detail->>'reason' FROM merchant_audit a WHERE a.merchant_id=m.id AND a.action='tick' AND a.detail->>'speciesId'=s.id ORDER BY a.created_at DESC LIMIT 1) AS price_reason,
     GREATEST(0,d.desired_quantity-i.quantity) AS needed,o.id AS order_id,

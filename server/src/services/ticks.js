@@ -29,21 +29,27 @@ export async function tick(db) {
       if (m.enabled && isMerchantBankrupt({ availableBalance: Number(m.available_balance), reserveFloor: Number(m.reserve_floor) })) { await closeBankruptMerchant(c, m); continue; }
       if (!m.enabled) { await c.query("INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'disabled','{}')", [m.id]); continue; }
       let budget = Math.min(Number(m.max_tick),Math.max(0,Number(m.available_balance)-Number(m.reserve_floor)));
-      const rows = (await c.query(`SELECT s.*,mi.quantity,md.desired_quantity,md.max_price,p.population_count,p.capacity,ms.current_price,ms.price_version
+      const rows = (await c.query(`SELECT s.*,mi.quantity,md.desired_quantity,md.max_price,p.population_count,p.capacity,ms.current_price,ms.price_version,COALESCE(shop.listings,0) AS shop_listings
         FROM merchant_demand md JOIN species s ON s.id=md.species_id
         JOIN merchant_inventory mi ON mi.species_id=s.id AND mi.merchant_id=md.merchant_id
         JOIN populations p ON p.species_id=s.id AND p.habitat_id=s.habitat_id JOIN market_state ms ON ms.species_id=s.id
+        LEFT JOIN (SELECT species_id,COUNT(*)::int AS listings FROM shop_listings WHERE status='active' GROUP BY species_id) shop ON shop.species_id=s.id
         WHERE md.merchant_id=$1 AND s.economic_enabled AND NOT s.protected ORDER BY s.id FOR UPDATE OF ms,mi`, [m.id])).rows;
       for (const s of rows) {
         const demand = Math.max(0,s.desired_quantity-s.quantity);
-        const next = nextPrice({ basePrice:Number(s.base_price),marketStock:s.quantity,targetStock:Math.max(1,s.desired_quantity),demand,population:s.population_count,capacity:s.capacity,previousPrice:Number(s.current_price) });
-        const updated = (await c.query('UPDATE market_state SET stock=$2,demand=$3,current_price=$4,price_version=price_version+1,updated_at=clock_timestamp() WHERE species_id=$1 RETURNING price_version', [s.id,s.quantity,demand,next.price])).rows[0]; prices++;
+        // One market, one price signal (docs/MARKETPLACE_MOTHERSHIP.md): a fish
+        // listed in a player shop is market supply exactly like a fish in the
+        // merchant's inventory, so it pushes the price the same way. Merchant
+        // demand is unchanged — a shop listing never satisfies it.
+        const marketStock = s.quantity + Number(s.shop_listings);
+        const next = nextPrice({ basePrice:Number(s.base_price),marketStock,targetStock:Math.max(1,s.desired_quantity),demand,population:s.population_count,capacity:s.capacity,previousPrice:Number(s.current_price) });
+        const updated = (await c.query('UPDATE market_state SET stock=$2,demand=$3,current_price=$4,price_version=price_version+1,updated_at=clock_timestamp() WHERE species_id=$1 RETURNING price_version', [s.id,marketStock,demand,next.price])).rows[0]; prices++;
         const quantity = next.price <= Number(s.max_price) ? Math.min(demand,Math.floor(Math.min(budget,Number(m.max_order))/next.price)) : 0;
         if (quantity) {
           await c.query(`INSERT INTO merchant_orders(id,merchant_id,species_id,quantity,unit_price,price_version,expires_at) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()+$7*interval '1 second')`, [randomUUID(),m.id,s.id,quantity,next.price,updated.price_version,config.marketTickSeconds*2]);
           budget -= quantity*next.price; orders++;
         }
-        await c.query(`INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'tick',$2)`, [m.id,{ speciesId:s.id,quantity,price:next.price,reason:next.reason,remainingBudget:budget }]);
+        await c.query(`INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'tick',$2)`, [m.id,{ speciesId:s.id,quantity,price:next.price,reason:next.reason,remainingBudget:budget,shopListings:Number(s.shop_listings) }]);
       }
     }
     return { grown, prices, orders };

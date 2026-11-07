@@ -169,3 +169,66 @@ test('economy HTTP transactions and deterministic worker', {skip:!process.env.TE
    assert.equal((await db.query('SELECT sum(delta)::text total FROM ledger_entries')).rows[0].total,'0');
  });
 });
+
+test('mothership marketplace: license, escrow, supply, and shop sale', {skip:!process.env.TEST_DATABASE_URL},async t=>{
+ const f=await testDatabase(),db=f.db,app=buildApp(db);t.after(async()=>{await app.close();await f.close();});
+ const guest=async()=>{const u=(await app.inject({method:'POST',url:'/api/sessions/guest'})).json();return {player:u.player,req:(method,url,payload,key=randomUUID())=>app.inject({method,url,payload,headers:{authorization:`Bearer ${u.token}`,'idempotency-key':key}})};};
+ const seller=await guest(), buyer=await guest();
+ const hunt=(await seller.req('POST','/api/hunts',{habitatId:'coral'})).json();
+ const receipts=[];
+ for(let i=0;i<2;i++){
+   await db.query("UPDATE player_equipment SET last_shot_at=clock_timestamp()-interval '2 seconds' WHERE player_id=$1",[seller.player.id]);
+   const r=await seller.req('POST',`/api/hunts/${hunt.id}/shots`,{shotId:randomUUID(),speciesId:'clownfish'});assert.equal(r.statusCode,201,r.body);receipts.push(r.json().receipt.id);
+ }
+ // No license, no listing.
+ assert.equal((await seller.req('POST','/api/market/shops/list',{receiptId:receipts[0],price:25})).statusCode,409);
+ assert.equal((await seller.req('POST','/api/market/shops/list',{receiptId:receipts[0],price:25})).json().error,'shop_license_required');
+ // Fund the seller and buy the license (500 CR sinks to the game treasury).
+ await db.query('UPDATE player_accounts SET balance=1000 WHERE player_id=$1',[seller.player.id]);
+ const license=await seller.req('POST','/api/market/shops/license',{});
+ assert.equal(license.statusCode,200,license.body);
+ assert.equal(license.json().price,500);
+ assert.equal((await db.query('SELECT balance FROM player_accounts WHERE player_id=$1',[seller.player.id])).rows[0].balance,'500');
+ assert.equal((await db.query("SELECT balance FROM game_treasury WHERE id='main'")).rows[0].balance,'500');
+ assert.equal((await seller.req('POST','/api/market/shops/license',{})).statusCode,409);
+ // List the first fish at 25 CR; a second listing of the same receipt fails.
+ const listing=await seller.req('POST','/api/market/shops/list',{receiptId:receipts[0],price:25});
+ assert.equal(listing.statusCode,200,listing.body);
+ const listingId=listing.json().listingId;
+ assert.equal((await seller.req('POST','/api/market/shops/list',{receiptId:receipts[0],price:25})).statusCode,409);
+ const shops=(await seller.req('GET','/api/market/shops')).json();
+ assert.equal(shops.license.tier,'boat');assert.equal(shops.listings.length,1);assert.equal(shops.myListings.length,1);
+ // Escrow: the merchant cannot quote a listed receipt.
+ assert.equal((await seller.req('GET',`/api/market/quotes?receiptId=${receipts[0]}`)).statusCode,409);
+ // The listing counts as market supply: tick stores merchant stock (0) + 1 listing.
+ await db.query("UPDATE merchant_accounts SET tick_started_at=clock_timestamp()-interval '2 minutes'");
+ await tick(db);
+ assert.equal((await db.query("SELECT stock FROM market_state WHERE species_id='clownfish'")).rows[0].stock,1);
+ // Shop sale: buyer pays the seller's price, the fish changes owner atomically.
+ await db.query('UPDATE player_accounts SET balance=1000 WHERE player_id=$1',[buyer.player.id]);
+ const sale=await buyer.req('POST','/api/market/shops/buy',{listingId});
+ assert.equal(sale.statusCode,200,sale.body);
+ assert.equal(sale.json().price,'25');
+ assert.equal((await db.query('SELECT balance FROM player_accounts WHERE player_id=$1',[seller.player.id])).rows[0].balance,'525');
+ assert.equal((await db.query('SELECT balance FROM player_accounts WHERE player_id=$1',[buyer.player.id])).rows[0].balance,'975');
+ assert.equal((await db.query('SELECT player_id FROM inventory_receipts WHERE receipt_id=$1',[receipts[0]])).rows[0].player_id,buyer.player.id);
+ assert.equal((await db.query("SELECT quantity FROM player_inventory WHERE player_id=$1 AND species_id='clownfish'",[seller.player.id])).rows[0].quantity,1);
+ assert.equal((await db.query("SELECT quantity FROM player_inventory WHERE player_id=$1 AND species_id='clownfish'",[buyer.player.id])).rows[0].quantity,1);
+ assert.equal((await db.query("SELECT status FROM shop_listings WHERE id=$1",[listingId])).rows[0].status,'sold');
+ assert.equal((await buyer.req('POST','/api/market/shops/buy',{listingId})).statusCode,409);
+ // The buyer now owns the fish and can quote it to the merchant.
+ assert.equal((await buyer.req('GET',`/api/market/quotes?receiptId=${receipts[0]}`)).statusCode,200);
+ // Race guard: a quote issued before the listing cannot settle the sale.
+ const q=(await seller.req('GET',`/api/market/quotes?receiptId=${receipts[1]}`)).json();
+ const listing2=await seller.req('POST','/api/market/shops/list',{receiptId:receipts[1],price:30});
+ assert.equal(listing2.statusCode,200,listing2.body);
+ const raced=await seller.req('POST','/api/market/sell',{quoteId:q.id});
+ assert.equal(raced.statusCode,409,raced.body);assert.equal(raced.json().error,'receipt_listed');
+ // Delist returns the fish to the merchant market.
+ const delisted=await seller.req('POST','/api/market/shops/delist',{listingId:listing2.json().listingId});
+ assert.equal(delisted.statusCode,200,delisted.body);
+ assert.equal((await seller.req('GET',`/api/market/quotes?receiptId=${receipts[1]}`)).statusCode,200);
+ // Ledger stays balanced.
+ assert.equal((await db.query('SELECT sum(delta)::text total FROM ledger_entries')).rows[0].total,'0');
+ assert.equal((await db.query('SELECT transaction_id FROM ledger_entries GROUP BY transaction_id HAVING sum(delta)<>0')).rowCount,0);
+});

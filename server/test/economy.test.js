@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nextPrice, regeneration, isMerchantBankrupt, reopenAmountNeeded } from '../src/domain/economy.js';
+import { nextPrice, regeneration, isMerchantBankrupt, reopenAmountNeeded, SHOP_LICENSE_PRICE_CR } from '../src/domain/economy.js';
 
 test('market price remains bounded and moves at most ten percent per tick', () => {
   const result = nextPrice({ basePrice: 50, marketStock: 0, targetStock: 20, demand: 100, population: 0, capacity: 100, previousPrice: 50 });
@@ -13,6 +13,20 @@ test('price falls when merchant demand is exhausted', () => {
   const result = nextPrice({ basePrice: 50, marketStock: 20, targetStock: 20, demand: 0, population: 50, capacity: 100, previousPrice: 50 });
   assert.equal(result.price, 45);
   assert.match(result.reason, /demand exhausted/);
+});
+
+test('shop listings count as market supply and push the price down', () => {
+  const base = { basePrice: 50, targetStock: 20, demand: 10, population: 100, capacity: 100, previousPrice: 50 };
+  const merchantOnly = nextPrice({ ...base, marketStock: 0 });
+  const withShops = nextPrice({ ...base, marketStock: 25 });
+  assert.ok(withShops.targetPrice < merchantOnly.targetPrice);
+  assert.ok(withShops.price < merchantOnly.price);
+  assert.match(merchantOnly.reason, /market stock below target/);
+  assert.match(withShops.reason, /market stock above target/);
+});
+
+test('shop license costs 500 CR in one place', () => {
+  assert.equal(SHOP_LICENSE_PRICE_CR, 500);
 });
 
 test('merchant is bankrupt at or below its reserve floor, open one CR above it', () => {
