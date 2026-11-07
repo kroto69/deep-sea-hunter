@@ -2,7 +2,7 @@
 
 ## Summary
 
-Gameplay/Boat Hub: headless desktop/mobile browser regressions passed. Online economy covers all 19 fish; isolated PostgreSQL integration tests pass, settlement remains off-chain. Fast Forward: local-only simulation. Merchant Testnet: one real `accept_purchase_order` sale plus storage deposit verified final by RPC; exact hashes and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled. NEP-245 audit blockers remain; this does not prove compliance. Google/Email: NOT IMPLEMENTED by request.
+Gameplay/Boat Hub: headless desktop/mobile browser regressions passed. Online economy covers all 19 fish; isolated PostgreSQL integration tests pass, settlement remains off-chain. Fast Forward: local-only simulation, now including merchant bankruptcy and optional reopening investment. Merchant bankruptcy + investment: implemented (close on sale/tick at reserve floor, reopen only via `POST /api/market/invest`); unit and Fast Forward tests pass, DB integration test written but not run in this sandbox (no PostgreSQL; needs `TEST_DATABASE_URL`). Merchant Testnet: one real `accept_purchase_order` sale plus storage deposit verified final by RPC; exact hashes and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled. NEP-245 audit blockers remain; this does not prove compliance. Google/Email: NOT IMPLEMENTED by request.
 
 ## Evidence
 

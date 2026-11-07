@@ -1,6 +1,32 @@
 import { randomUUID } from 'node:crypto';
 import { fail, playerTransaction, ledger, transaction } from './transaction.js';
 import { requireActiveSession } from './sessions.js';
+import { isMerchantBankrupt, reopenAmountNeeded } from '../domain/economy.js';
+
+// Close a broke merchant: shop stops buying (quote/sell/tick/orders all gate on
+// enabled), bankrupt_at records why it closed. Callers hold the merchant row lock.
+export async function closeBankruptMerchant(c, m) {
+  await c.query("UPDATE merchant_accounts SET enabled=FALSE,bankrupt_at=clock_timestamp() WHERE id=$1", [m.id]);
+  await c.query("INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'bankrupt',$2)", [m.id, { availableBalance: Number(m.available_balance), reserveFloor: Number(m.reserve_floor) }]);
+}
+
+export async function invest(db, identity, merchantId, amount, idempotencyKey) {
+  if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1_000_000_000) fail('invalid_investment_amount', 400);
+  return playerTransaction(db, identity, idempotencyKey, async (c, scoped) => {
+    const m = (await c.query('SELECT * FROM merchant_accounts WHERE id=$1 FOR UPDATE', [merchantId])).rows[0];
+    if (!m) fail('merchant_not_found', 404);
+    if (!m.bankrupt_at) fail(m.enabled ? 'merchant_not_bankrupt' : 'merchant_closed');
+    const needed = reopenAmountNeeded({ availableBalance: Number(m.available_balance), reserveFloor: Number(m.reserve_floor) });
+    if (amount < needed) fail('investment_below_reopen_amount');
+    const balance = (await c.query('UPDATE player_accounts SET balance=balance-$2,version=version+1 WHERE player_id=$1 AND balance >= $2 RETURNING balance', [identity.id, amount])).rows[0]?.balance;
+    if (balance === undefined) fail('insufficient_credits');
+    const updated = (await c.query('UPDATE merchant_accounts SET total_treasury=total_treasury+$2,available_balance=available_balance+$2,invested_total=invested_total+$2,enabled=TRUE,bankrupt_at=NULL WHERE id=$1 RETURNING total_treasury,available_balance', [m.id, amount])).rows[0];
+    const id = await ledger(c, { playerId: identity.id, key: scoped, kind: 'merchant_investment', amount: BigInt(amount), reference: m.id, from: ['player', identity.id], to: ['merchant', m.id], result: { merchantId: m.id, reopened: true, needed } });
+    await c.query("INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'invest',$2)", [m.id, { playerId: identity.id, transactionId: id, amount, needed }]);
+    await c.query("INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'reopened',$2)", [m.id, { playerId: identity.id, transactionId: id, availableBalance: Number(updated.available_balance) }]);
+    return { transactionId: id, merchantId: m.id, amount: amount.toString(), needed: needed.toString(), playerBalance: balance, merchantAvailable: updated.available_balance, reopened: true, settlement: 'simulated_offchain' };
+  });
+}
 
 export async function quote(db, identity, receiptId) {
   return transaction(db, async c => {
@@ -39,6 +65,8 @@ export async function sell(db, identity, quoteId, idempotencyKey) {
     await c.query("UPDATE catch_receipts SET status='sold' WHERE id=$1", [r.id]);
     await c.query('UPDATE market_quotes SET settled_at=clock_timestamp() WHERE id=$1', [q.id]);
     await c.query('UPDATE merchant_accounts SET total_treasury=total_treasury-$2,available_balance=available_balance-$2,tick_spent=tick_spent+$2 WHERE id=$1', [m.id,amount.toString()]);
+    const availableAfter = Number(m.available_balance) - Number(amount);
+    if (isMerchantBankrupt({ availableBalance: availableAfter, reserveFloor: Number(m.reserve_floor) })) await closeBankruptMerchant(c, { ...m, available_balance: availableAfter });
     await c.query('UPDATE merchant_orders SET quantity=quantity-1 WHERE id=$1', [order.id]);
     await c.query('UPDATE merchant_inventory SET quantity=quantity+1 WHERE merchant_id=$1 AND species_id=$2', [m.id,r.species_id]);
     await c.query('UPDATE market_state SET stock=stock+1,demand=GREATEST(0,demand-1) WHERE species_id=$1', [r.species_id]);

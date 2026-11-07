@@ -327,6 +327,12 @@ html, body {
 .merchant-status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #66d09a; }
 .merchant-status.is-paused { color: #e3ad75; }
 .merchant-status.is-paused::before { background: #e3ad75; }
+.merchant-status.is-bankrupt { color: #ef9a9a; }
+.merchant-status.is-bankrupt::before { background: #e57373; }
+.market-bankrupt { padding: 12px; margin: 4px 0 12px; border: 1px solid rgba(229,115,115,.45); background: rgba(229,115,115,.08); }
+.market-bankrupt p { color: #e8b4b4; font-size: 12px; line-height: 1.6; margin: 0 0 10px; }
+.market-bankrupt .hub-quick { margin: 0 0 6px; }
+.market-bankrupt .hub-note { margin: 0; }
 .market-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 18px; padding: 13px 0; margin-bottom: 13px; border-top: 1px solid rgba(120,200,255,.11); border-bottom: 1px solid rgba(120,200,255,.11); }
 .market-metrics > div { display: grid; gap: 6px; min-width: 0; }
 .market-metrics small { color: #628b9b; font: 9px monospace; letter-spacing: .8px; }

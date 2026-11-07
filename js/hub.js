@@ -167,7 +167,10 @@ export class Hub {
     clearInterval(this.fastForwardTimer);
     const inv = this.progression.data.inventory;
     const demand = Object.fromEntries(Object.keys(FISH_PRICES).map(id => [id, Math.max(1, Math.round((FISH_PRICES[id] || 20) / 10))]));
-    this.simulation = simulateSevenDays({ inventory: inv, treasury: this.progression.cash, demand });
+    // Simulated treasury is the merchant's (mirrors MERCHANT_INITIAL_TREASURY=10000
+    // in the backend seed), not the player's cash: a broke merchant would
+    // otherwise make the whole simulated week trade nothing.
+    this.simulation = simulateSevenDays({ inventory: inv, treasury: 10000, demand });
     this.simulationDay = 0;
     this.renderSimulation();
     this.fastForwardStarted = Date.now();
@@ -184,7 +187,7 @@ export class Hub {
     const node = document.createElement('section');
     node.className = 'hub-simulation';
     node.setAttribute('aria-live', 'polite');
-    node.innerHTML = `<h3>LOCAL SIMULATION · NOT ON-CHAIN</h3><p>7 days / 60 seconds · day ${day}/7 · treasury ${this.simulation.before.treasury} → ${this.simulation.after.treasury} CR</p><ol>${this.simulation.days.slice(0, day).map(d=>`<li><b>Day ${d.day}</b> · treasury ${d.treasury} CR${d.events.map(e=>`<br>${e.species}: supplied ${e.supplied}, bought ${e.bought}; stock ${e.stockBefore}→${e.stockAfter}; demand ${e.demandBefore}→${e.demandAfter}; price ${e.priceBefore}→${e.price} CR · ${e.reason}`).join('')}</li>`).join('')}</ol>`;
+    node.innerHTML = `<h3>LOCAL SIMULATION · NOT ON-CHAIN</h3><p>7 days / 60 seconds · day ${day}/7 · treasury ${this.simulation.before.treasury} → ${this.simulation.after.treasury} CR${this.simulation.after.merchantClosed ? ' · MERCHANT BANKRUPT (closed)' : ''}</p><ol>${this.simulation.days.slice(0, day).map(d=>`<li><b>Day ${d.day}</b> · treasury ${d.treasury} CR${d.merchantClosed ? ' · SHOP CLOSED' : ''}${d.events.map(e=>e.type==='bankrupt'?`<br>Merchant went bankrupt: treasury ${e.treasuryAfter} CR at/below its ${e.reserveFloor} CR reserve floor — shop closed until someone invests.`:e.type==='invest'?`<br>Investment +${e.amount} CR → treasury ${e.treasuryAfter} CR · ${e.reopened ? 'merchant reopened' : `still closed, needs ${e.neededAfter} CR more`}.`:e.closed?`<br>${e.species}: shop closed (bankrupt) — no trading; price stays ${e.price} CR.`:`<br>${e.species}: supplied ${e.supplied}, bought ${e.bought}; stock ${e.stockBefore}→${e.stockAfter}; demand ${e.demandBefore}→${e.demandAfter}; price ${e.priceBefore}→${e.price} CR · ${e.reason}`).join('')}</li>`).join('')}</ol>`;
     this.body.append(node);
   }
 }

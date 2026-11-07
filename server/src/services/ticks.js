@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { logisticGrowth, nextPrice } from '../domain/economy.js';
+import { logisticGrowth, nextPrice, isMerchantBankrupt } from '../domain/economy.js';
+import { closeBankruptMerchant } from './market.js';
 import { transaction } from './transaction.js';
 import { config } from '../config/env.js';
 
@@ -25,6 +26,7 @@ export async function tick(db) {
       if (!due) continue;
       await c.query('UPDATE merchant_accounts SET tick_spent=0,tick_started_at=clock_timestamp() WHERE id=$1', [m.id]);
       await c.query('DELETE FROM merchant_orders WHERE merchant_id=$1', [m.id]);
+      if (m.enabled && isMerchantBankrupt({ availableBalance: Number(m.available_balance), reserveFloor: Number(m.reserve_floor) })) { await closeBankruptMerchant(c, m); continue; }
       if (!m.enabled) { await c.query("INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'disabled','{}')", [m.id]); continue; }
       let budget = Math.min(Number(m.max_tick),Math.max(0,Number(m.available_balance)-Number(m.reserve_floor)));
       const rows = (await c.query(`SELECT s.*,mi.quantity,md.desired_quantity,md.max_price,p.population_count,p.capacity,ms.current_price,ms.price_version

@@ -125,4 +125,47 @@ test('economy HTTP transactions and deterministic worker', {skip:!process.env.TE
    await db.query("UPDATE merchant_accounts SET enabled=FALSE,tick_started_at=clock_timestamp()-interval '2 minutes'");await tick(db);
    assert.equal((await db.query('SELECT * FROM merchant_orders')).rowCount,0);
  });
+ await t.test('bankrupt merchant closes and reopens only by investment',async()=>{
+   const merchant=async()=>(await db.query("SELECT enabled,total_treasury,available_balance,reserve_floor,bankrupt_at,invested_total FROM merchant_accounts WHERE id='dock-merchant'")).rows[0];
+   const investCall=(amount,key=randomUUID())=>req('POST','/api/market/invest',{merchantId:'dock-merchant',amount},key);
+   await db.query("UPDATE player_accounts SET balance=5000 WHERE player_id=$1",[user.player.id]);
+   await db.query("UPDATE merchant_accounts SET enabled=TRUE,bankrupt_at=NULL,total_treasury=500,available_balance=500,tick_spent=0,tick_started_at=clock_timestamp()-interval '2 minutes',invested_total=0 WHERE id='dock-merchant'");
+   // Tick closes a merchant whose treasury is below its reserve floor.
+   await tick(db);
+   let m=await merchant();
+   assert.equal(m.enabled,false);assert.ok(m.bankrupt_at);
+   assert.equal((await db.query('SELECT * FROM merchant_orders')).rowCount,0);
+   assert.equal((await db.query("SELECT count(*)::int n FROM merchant_audit WHERE merchant_id='dock-merchant' AND action='bankrupt'")).rows[0].n,1);
+   assert.equal((await req('GET','/api/market/orders')).json().find(o=>o.species_id==='clownfish').status,'bankrupt');
+   // Reopening needs reserve_floor - available + 1 = 501 CR; less stays closed.
+   assert.equal((await investCall(500)).statusCode,409);
+   assert.equal((await investCall(500)).json().error,'investment_below_reopen_amount');
+   const key=randomUUID();
+   const reopened=await investCall(501,key);assert.equal(reopened.statusCode,200,reopened.body);
+   assert.equal(reopened.json().reopened,true);assert.equal(reopened.json().needed,'501');
+   m=await merchant();assert.equal(m.enabled,true);assert.equal(m.bankrupt_at,null);assert.equal(m.available_balance,'1001');assert.equal(m.invested_total,'501');
+   assert.equal((await db.query('SELECT balance FROM player_accounts WHERE player_id=$1',[user.player.id])).rows[0].balance,'4499');
+   assert.equal((await investCall(501,key)).statusCode,409);
+   assert.equal((await db.query('SELECT sum(delta)::text total FROM ledger_entries')).rows[0].total,'0');
+   // A sale that lands the treasury exactly on the reserve floor closes the shop at once.
+   const hunt2=(await req('POST','/api/hunts',{habitatId:'coral'})).json();
+   const fresh=[];
+   for(let i=0;i<2;i++){
+     await db.query("UPDATE player_equipment SET last_shot_at=clock_timestamp()-interval '2 seconds' WHERE player_id=$1",[user.player.id]);
+     const r=await req('POST',`/api/hunts/${hunt2.id}/shots`,{shotId:randomUUID(),speciesId:'clownfish'});assert.equal(r.statusCode,201,r.body);fresh.push(r.json().receipt.id);
+   }
+   await db.query("UPDATE merchant_accounts SET total_treasury=1018,available_balance=1018 WHERE id='dock-merchant'");
+   await db.query("UPDATE market_state SET current_price=18 WHERE species_id='clownfish'");
+   await db.query(`INSERT INTO merchant_orders(id,merchant_id,species_id,quantity,unit_price,price_version,expires_at)
+     SELECT gen_random_uuid(),'dock-merchant','clownfish',10,18,ms.price_version,clock_timestamp()+interval '10 minutes' FROM market_state ms WHERE ms.species_id='clownfish'
+     ON CONFLICT(merchant_id,species_id) DO UPDATE SET quantity=10,unit_price=18,price_version=EXCLUDED.price_version,expires_at=EXCLUDED.expires_at`);
+   const q2=(await req('GET',`/api/market/quotes?receiptId=${fresh[0]}`)).json();
+   const sold2=await req('POST','/api/market/sell',{quoteId:q2.id});assert.equal(sold2.statusCode,200,sold2.body);
+   m=await merchant();assert.equal(m.available_balance,'1000');assert.equal(m.enabled,false);assert.ok(m.bankrupt_at);
+   assert.equal((await req('GET','/api/market/orders')).json().find(o=>o.species_id==='clownfish').status,'bankrupt');
+   assert.equal((await req('GET',`/api/market/quotes?receiptId=${fresh[1]}`)).statusCode,409);
+   const reopened2=await investCall(1);assert.equal(reopened2.statusCode,200,reopened2.body);
+   m=await merchant();assert.equal(m.enabled,true);assert.equal(m.bankrupt_at,null);assert.equal(m.invested_total,'502');
+   assert.equal((await db.query('SELECT sum(delta)::text total FROM ledger_entries')).rows[0].total,'0');
+ });
 });

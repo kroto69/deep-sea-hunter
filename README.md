@@ -9,6 +9,7 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 | Gameplay and existing Hub tabs | DONE / TESTED | Existing Three.js gameplay, controls, progression and Guest save remain. Automated coverage is headless only. |
 | Fast Forward | SIMULATED / TESTED | Seven local simulated days in one minute; does not mutate save, backend or chain. |
 | Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices and merchant demand. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
+| Merchant bankruptcy + investment | IMPLEMENTED / TESTED (unit + Fast Forward; DB integration written, needs `TEST_DATABASE_URL`) | Merchant closes when its available balance reaches its reserve floor (default 1000 CR) and reopens only when a player invests enough CR to lift it above the floor (`POST /api/market/invest`). Rule lives in `js/economy-rules.js`; closure is detected on sale and on market tick; Fast Forward simulates it. Off-chain CR only. |
 | NEAR merchant | ON-CHAIN SELL VERIFIED / COMPLIANCE INCOMPLETE | Testnet `accept_purchase_order` finalized; hash and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled; NEP-245 blockers remain. |
 | Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite (46), Sandbox economy and adversarial receiver transfer-call checks pass locally; storage accounting and broader compliance review remain. Deployed WASM is older. Do not claim compliance. |
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders only. No identity provider or email delivery. Guest remains playable. |
@@ -72,13 +73,13 @@ node tests/fast-forward.test.mjs
 
 - **~30 seconds:** dive target habitat, catch fish with oxygen/ammo constraints, return with server-validated receipt.
 - **~5 minutes:** backend market tick updates populations, stock/demand prices and treasury-bounded merchant orders. Choose sale or hold, then plan next dive from `WHY THIS PRICE?` reasoning.
-- **Per session:** complete dives and sales, earn off-chain CR, buy progression, inspect merchant inventory/treasury/history. Fast Forward previews seven simulated days in one minute locally; it is not a live economic tick.
+- **Per session:** complete dives and sales, earn off-chain CR, buy progression, inspect merchant inventory/treasury/history. If selling drains the merchant treasury to its reserve floor, the shop closes (CLOSED · BANKRUPT) and buys nothing until a player invests enough CR to reopen it (`POST /api/market/invest`). Fast Forward previews seven simulated days in one minute locally, including bankruptcy and an optional reopening investment; it is not a live economic tick.
 
 ## Demo economy and NEAR tab
 
 Online Guest can catch all 19 fish shown by `js/fish.js`. Each seeded fish has its own base price and merchant demand. Catching reduces server population; selling raises merchant stock and reduces demand, so the next market tick can lower price when demand is exhausted. Merchant CR, inventory, and receipts live in PostgreSQL off-chain. Seed changes apply only after `npm run seed`; existing population rows remain unchanged.
 
-Fast Forward is a deterministic local demo of seven days of demand, stock, and treasury. It displays before/after and does not persist or call backend/chain.
+Fast Forward is a deterministic local demo of seven days of demand, stock, and treasury. It displays before/after and does not persist or call backend/chain. A treasury at or below the 1000 CR reserve floor starts the week bankrupt (no trading); pass `invest: { day, amount }` to `simulateSevenDays` to preview a reopening investment on that day.
 
 NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes storage deposit, sell, and withdrawal calls. `.env.example` configures `NEAR_CONTRACT_ID` for collectibles, not merchant; set merchant ID separately to enable merchant state/actions. Mint stays disabled until receipt-backed authorization is safe. After a wallet returns a hash, UI verifies signer, receiver, merchant method, final execution status, and merchant receipt against Testnet RPC. UI shows FINAL only after successful final receipt verification; state still needs SYNC ON-CHAIN. Pending finality stays labeled pending. Verify resulting state before claiming economic settlement. Verified Testnet sale evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`; merchant prototype is not confirmed NEP-245 compliant. Google/Email controls are disabled; authentication is NOT IMPLEMENTED.
 

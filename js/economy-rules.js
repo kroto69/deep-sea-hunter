@@ -1,4 +1,24 @@
 export const PRICE_LIMITS = Object.freeze({ min: 1, maxMultiplier: 3, maxTickDeltaBps: 1000 });
+
+// Merchant bankruptcy (Track 09: "if a merchant goes broke, it closes its shop
+// until someone invests in it"). One rule, shared by server, ticks and Fast Forward:
+// a merchant is broke when its available balance has fallen to its reserve floor,
+// because the sell guard already blocks every purchase below that floor
+// (available_balance - price < reserve_floor). A broke merchant closes immediately
+// and reopens only through a player investment, never on its own.
+export function isMerchantBankrupt({ availableBalance, reserveFloor }) {
+  for (const [name, value] of Object.entries({ availableBalance, reserveFloor })) {
+    if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${name} must be a non-negative safe integer`);
+  }
+  return availableBalance <= reserveFloor;
+}
+
+// CR a player must invest to reopen a broke merchant: one CR above the floor.
+// Investing less keeps the shop closed; investing this much or more reopens it.
+export function reopenAmountNeeded({ availableBalance, reserveFloor }) {
+  if (isMerchantBankrupt({ availableBalance, reserveFloor })) return reserveFloor - availableBalance + 1;
+  return 0;
+}
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // Shared pricing rule for PostgreSQL merchant ticks and local Fast Forward.

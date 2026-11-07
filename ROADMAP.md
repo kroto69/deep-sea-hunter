@@ -4,7 +4,8 @@
 |---|---|---|
 | Existing gameplay and Boat Hub tabs | DONE / TESTED | Headless desktop/mobile regression passed; physical-device performance UNVERIFIED. |
 | Online demo economy | IMPLEMENTED / TESTED | All 19 fish, distinct per-fish base price and merchant demand; PostgreSQL integration tests passed with isolated schemas. Settlement stays off-chain. |
-| Fast Forward | SIMULATED / TESTED | Deterministic local seven-day timeline; no persisted/backend/chain mutations. |
+| Fast Forward | SIMULATED / TESTED | Deterministic local seven-day timeline; no persisted/backend/chain mutations. Simulates merchant bankruptcy and optional reopening investment. |
+| Merchant bankruptcy + investment | IMPLEMENTED / TESTED (unit + Fast Forward; DB integration written, needs `TEST_DATABASE_URL`) | Close on sale/tick when available balance reaches reserve floor; reopen only via `POST /api/market/invest` with enough CR. Off-chain CR only; NEAR merchant unaffected. |
 | NEAR tab | PARTIAL / UNVERIFIED | Configured merchant state, storage, sell, and withdrawal UI calls exist; no RPC-final transaction evidence in this review. Mint disabled. |
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders; provider and delivery absent. |
 | Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Local WASM build and Sandbox economy flow pass; runtime receiver/storage, event, metadata, resolver and batch conformance blockers remain. |
