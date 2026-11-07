@@ -120,3 +120,44 @@ const TID: &str = "fish:fish-000001";
  let r:AccountId="minimum.testnet".parse().unwrap(); ctx(r,min); c.register();
  ctx(accounts(3),1); c.mt_transfer("minimum.testnet".parse().unwrap(),TID.into(),U128(1),None,None);
 }
+
+
+// ---- session-key settlement: receipt-verified mint_catch ----
+// Test vector generated with node:crypto (ed25519) over the exact message
+// "dsh-catch-v1\n550e8400-e29b-41d4-a716-446655440000\ndanny\nclownfish\nClownfish".
+// accounts(3) is "danny" in near-sdk test utils; regenerate both values together
+// if any of the signed fields change.
+const SETTLEMENT_PUBKEY: &str = "6dfac2fe0410f130b57cca064f55f30f226ba86966dcd53f4dc083256822e8d0";
+const RECEIPT_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
+const RECEIPT_SIG: &str = "9c4843c5f5f0fe39092671d03b242486c43e86deedb9bf652275c5788c9a53a7117563116c6c3ca386e4bf9c339dfaeae14589e44b90ef1f79e973dcc096430d";
+const RECEIPT_TOKEN: &str = "fish:550e8400-e29b-41d4-a716-446655440000";
+fn settlement_setup() -> Contract { let mut c=setup(); ctx(accounts(0),1); c.set_settlement_key(SETTLEMENT_PUBKEY.into()); c }
+fn settle(c: &mut Contract) { ctx(accounts(3),1); c.mint_catch(RECEIPT_ID.into(),accounts(3),"clownfish".into(),"Clownfish".into(),RECEIPT_SIG.into()); }
+#[test] fn mint_catch_settles_signed_receipt(){
+  let mut c=settlement_setup(); settle(&mut c);
+  assert_eq!(c.mt_balance_of(accounts(3),RECEIPT_TOKEN.into()).0,1);
+  assert_eq!(c.mt_metadata_token_by_token_id(vec![RECEIPT_TOKEN.into()])[0].as_ref().unwrap().title,Some("Clownfish".into()));
+  assert!(near_sdk::test_utils::get_logs().iter().any(|l|l.contains("\"mt_mint\"")));
+}
+#[test] #[should_panic(expected="Receipt already settled")] fn mint_catch_rejects_receipt_replay(){
+  let mut c=settlement_setup(); settle(&mut c); settle(&mut c);
+}
+#[test] #[should_panic(expected="Bad receipt signature")] fn mint_catch_rejects_bad_signature(){
+  let mut c=settlement_setup(); ctx(accounts(3),1);
+  let mut bad=RECEIPT_SIG.to_string(); bad.replace_range(0..2,"00");
+  c.mint_catch(RECEIPT_ID.into(),accounts(3),"clownfish".into(),"Clownfish".into(),bad);
+}
+#[test] #[should_panic(expected="Only the catcher can settle")] fn mint_catch_rejects_wrong_catcher(){
+  let mut c=settlement_setup(); ctx(accounts(4),1);
+  c.mint_catch(RECEIPT_ID.into(),accounts(3),"clownfish".into(),"Clownfish".into(),RECEIPT_SIG.into());
+}
+#[test] #[should_panic(expected="Settlement key not set")] fn mint_catch_requires_settlement_key(){
+  let mut c=setup(); ctx(accounts(3),1);
+  c.mint_catch(RECEIPT_ID.into(),accounts(3),"clownfish".into(),"Clownfish".into(),RECEIPT_SIG.into());
+}
+#[test] #[should_panic(expected="Owner only")] fn set_settlement_key_is_owner_only(){
+  let mut c=setup(); ctx(accounts(3),1); c.set_settlement_key(SETTLEMENT_PUBKEY.into());
+}
+#[test] #[should_panic(expected="Bad settlement key")] fn set_settlement_key_rejects_short_key(){
+  let mut c=setup(); ctx(accounts(0),1); c.set_settlement_key("abcd".into());
+}
