@@ -1,4 +1,30 @@
 export const PRICE_LIMITS = Object.freeze({ min: 1, maxMultiplier: 3, maxTickDeltaBps: 1000 });
+
+// Mothership marketplace, slice 1 (docs/MARKETPLACE_MOTHERSHIP.md): one shop
+// tier — a boat stall inside the lobby hub. The license costs 500 CR, same
+// order as a zone unlock (400 CR): roughly 28 clownfish sales. One place to
+// tune it; the CR goes to the game treasury as a sink, not to the merchant.
+export const SHOP_LICENSE_PRICE_CR = 500;
+
+// Merchant bankruptcy (Track 09: "if a merchant goes broke, it closes its shop
+// until someone invests in it"). One rule, shared by server, ticks and Fast Forward:
+// a merchant is broke when its available balance has fallen to its reserve floor,
+// because the sell guard already blocks every purchase below that floor
+// (available_balance - price < reserve_floor). A broke merchant closes immediately
+// and reopens only through a player investment, never on its own.
+export function isMerchantBankrupt({ availableBalance, reserveFloor }) {
+  for (const [name, value] of Object.entries({ availableBalance, reserveFloor })) {
+    if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(`${name} must be a non-negative safe integer`);
+  }
+  return availableBalance <= reserveFloor;
+}
+
+// CR a player must invest to reopen a broke merchant: one CR above the floor.
+// Investing less keeps the shop closed; investing this much or more reopens it.
+export function reopenAmountNeeded({ availableBalance, reserveFloor }) {
+  if (isMerchantBankrupt({ availableBalance, reserveFloor })) return reserveFloor - availableBalance + 1;
+  return 0;
+}
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // Shared pricing rule for PostgreSQL merchant ticks and local Fast Forward.
@@ -19,8 +45,10 @@ export function nextPrice({ basePrice, marketStock, targetStock, demand, populat
   const reasons = [];
   if (scarcityBps >= 5_000) reasons.push('habitat population scarce');
   else if (scarcityBps <= 2_000) reasons.push('habitat population abundant');
-  if (stockPressureBps > 0) reasons.push('merchant stock below target');
-  else if (stockPressureBps < 0) reasons.push('merchant stock above target');
+  // marketStock is merchant stock PLUS active player-shop listings of the
+  // species (docs/MARKETPLACE_MOTHERSHIP.md): one market, one price signal.
+  if (stockPressureBps > 0) reasons.push('market stock below target');
+  else if (stockPressureBps < 0) reasons.push('market stock above target');
   if (demand === 0) reasons.push('merchant demand exhausted');
   else if (demandBps > 0) reasons.push('merchant demand');
   return { price, targetPrice: target, factors: { scarcityBps, stockPressureBps, demandBps, multiplierBps }, reason: reasons.join('; ') || 'balanced supply and demand' };

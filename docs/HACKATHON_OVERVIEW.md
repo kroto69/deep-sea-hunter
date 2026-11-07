@@ -6,7 +6,7 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 - **Every ~30 seconds:** dive a requested habitat, catch fish while managing oxygen/ammo, then return with a validated catch receipt. Server checks cooldown, population, species quota, and duplicate shot IDs.
 - **Every ~5 minutes:** market tick recalculates stock/demand prices, expires old orders, creates treasury-bounded buy orders, and regenerates habitat populations. Player chooses whether to sell now for CR or hold inventory and target scarce/high-demand species next dive.
-- **Per session:** review price reasoning, complete several dives and sales, buy progression upgrades, inspect merchant stock/treasury/history, and compare market outcomes. Fast Forward previews seven simulated days in one minute; it is local-only and does not alter online economy or chain.
+- **Per session:** review price reasoning, complete several dives and sales, buy progression upgrades, inspect merchant stock/treasury/history, and compare market outcomes. If sales drain the merchant treasury to its reserve floor (default 1000 CR), the shop closes as BANKRUPT and buys nothing until a player invests enough CR to lift it above the floor (`POST /api/market/invest`, also a button in the Market tab). Fast Forward previews seven simulated days in one minute, including bankruptcy and an optional reopening investment; it is local-only and does not alter online economy or chain.
 
 ## Current features
 
@@ -26,7 +26,7 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 **Collectibles Contract Account** is the separate NFT account (`deepfish-contract.testnet`). **Merchant config** may point to `dsh-merchant-v1.deepfish-owner.testnet`; previous read-only audit recorded deployed state, but this pass did not re-query it. Neither is a game balance.
 
-**Merchant NPC** is an automated backend buyer. It has needs, inventory, orders, and internal treasury. It is not a NEAR account and makes no blockchain transactions.
+**Merchant NPC** is an automated backend buyer. It has needs, inventory, orders, and internal treasury. It is not a NEAR account and makes no blockchain transactions. It goes bankrupt when its available balance reaches its reserve floor: the shop closes (no quotes, sales, or orders) until a player invests CR into its treasury. The rule lives in `js/economy-rules.js` (`isMerchantBankrupt` / `reopenAmountNeeded`), closure is detected on sale and on market tick, and investment is a balanced ledger transaction (`merchant_investment`, player → merchant).
 
 **Game Treasury** is an internal game ledger, separate from Player Balance, Merchant Treasury, player wallet, and contract.
 

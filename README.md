@@ -9,8 +9,10 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 | Gameplay and existing Hub tabs | DONE / TESTED | Existing Three.js gameplay, controls, progression and Guest save remain. Automated coverage is headless only. |
 | Fast Forward | SIMULATED / TESTED | Seven local simulated days in one minute; does not mutate save, backend or chain. |
 | Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices and merchant demand. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
+| Merchant bankruptcy + investment | IMPLEMENTED / TESTED (unit + Fast Forward; DB integration written, needs `TEST_DATABASE_URL`) | Merchant closes when its available balance reaches its reserve floor (default 1000 CR) and reopens only when a player invests enough CR to lift it above the floor (`POST /api/market/invest`). Rule lives in `js/economy-rules.js`; closure is detected on sale and on market tick; Fast Forward simulates it. Off-chain CR only. |
+| Mothership marketplace (player shops) | IMPLEMENTED LOCALLY / TESTED (unit; DB integration written, needs `TEST_DATABASE_URL`) | Backend only, no hub UI yet (slice 2). One-time 500 CR boat-stall license (`POST /api/market/shops/license`, CR sinks to game treasury); players list caught fish at their own price and buy each other's fish in one atomic CR↔receipt swap. Listed receipts are escrowed from the merchant, and active shop listings count as market supply in the tick price (one market, one price signal). Design in `docs/MARKETPLACE_MOTHERSHIP.md`. Off-chain CR only; on-chain settlement needs the server receipt-signing endpoint. |
 | NEAR merchant | ON-CHAIN SELL VERIFIED / COMPLIANCE INCOMPLETE | Testnet `accept_purchase_order` finalized; hash and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled; NEP-245 blockers remain. |
-| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite (46), Sandbox economy and adversarial receiver transfer-call checks pass locally; storage accounting and broader compliance review remain. Deployed WASM is older. Do not claim compliance. |
+| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite (59, was 52): +7 receipt-verified `mint_catch` tests (valid settlement, replay, bad signature, wrong catcher, missing key, owner-only rotation). Session-key settlement designed (`docs/SETTLEMENT_SESSION_KEYS.md`) + `js/session-key.js` module (grant/revoke/background calls/outbox); slice 2 done 2026-11-07 (server receipt-signing endpoint + catch → mint wiring, unit-tested incl. the Rust test vector). Sell/buy transfer leg + Testnet verification still missing. Sandbox economy and transfer-call suites previously passed but were not re-run in this sandbox (`neard` needs fd limit 65535, container hard limit is 4096). Deployed WASM is older; redeploy checklist in `contracts/merchant/README.md`. Do not claim compliance. |
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders only. No identity provider or email delivery. Guest remains playable. |
 | Existing collectibles NFT | DONE / TESTED (historical deployment only) | Separate deployed NFT contract; does not prove merchant trades. Not modified here. |
 
@@ -72,13 +74,13 @@ node tests/fast-forward.test.mjs
 
 - **~30 seconds:** dive target habitat, catch fish with oxygen/ammo constraints, return with server-validated receipt.
 - **~5 minutes:** backend market tick updates populations, stock/demand prices and treasury-bounded merchant orders. Choose sale or hold, then plan next dive from `WHY THIS PRICE?` reasoning.
-- **Per session:** complete dives and sales, earn off-chain CR, buy progression, inspect merchant inventory/treasury/history. Fast Forward previews seven simulated days in one minute locally; it is not a live economic tick.
+- **Per session:** complete dives and sales, earn off-chain CR, buy progression, inspect merchant inventory/treasury/history. If selling drains the merchant treasury to its reserve floor, the shop closes (CLOSED · BANKRUPT) and buys nothing until a player invests enough CR to reopen it (`POST /api/market/invest`). Fast Forward previews seven simulated days in one minute locally, including bankruptcy and an optional reopening investment; it is not a live economic tick.
 
 ## Demo economy and NEAR tab
 
 Online Guest can catch all 19 fish shown by `js/fish.js`. Each seeded fish has its own base price and merchant demand. Catching reduces server population; selling raises merchant stock and reduces demand, so the next market tick can lower price when demand is exhausted. Merchant CR, inventory, and receipts live in PostgreSQL off-chain. Seed changes apply only after `npm run seed`; existing population rows remain unchanged.
 
-Fast Forward is a deterministic local demo of seven days of demand, stock, and treasury. It displays before/after and does not persist or call backend/chain.
+Fast Forward is a deterministic local demo of seven days of demand, stock, and treasury. It displays before/after and does not persist or call backend/chain. A treasury at or below the 1000 CR reserve floor starts the week bankrupt (no trading); pass `invest: { day, amount }` to `simulateSevenDays` to preview a reopening investment on that day.
 
 NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes storage deposit, sell, and withdrawal calls. `.env.example` configures `NEAR_CONTRACT_ID` for collectibles, not merchant; set merchant ID separately to enable merchant state/actions. Mint stays disabled until receipt-backed authorization is safe. After a wallet returns a hash, UI verifies signer, receiver, merchant method, final execution status, and merchant receipt against Testnet RPC. UI shows FINAL only after successful final receipt verification; state still needs SYNC ON-CHAIN. Pending finality stays labeled pending. Verify resulting state before claiming economic settlement. Verified Testnet sale evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`; merchant prototype is not confirmed NEP-245 compliant. Google/Email controls are disabled; authentication is NOT IMPLEMENTED.
 
@@ -87,12 +89,12 @@ NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes s
 The separate merchant prototype is **INCOMPLETE / UNVERIFIED** against official NEP-245. One `accept_purchase_order` flow is verified finalized on Testnet; this does not establish full NEP-245 compliance. Known blockers:
 
 - No real cross-contract receiver round-trip test; Sandbox tests cover only merchant settlement, not malicious receiver behavior.
-- No assertion of runtime `EVENT_JSON` logs.
-- Storage operations remain incompletely safe: available storage does not cover all per-token balance/metadata writes, and async refunds lack resolver.
-- Metadata JSON ABI and token view representation need verification against metadata extension.
+- `EVENT_JSON` logs: mint + transfer shapes are now unit-asserted locally; a runtime log assertion on Testnet is still missing.
+- Storage operations: per-write delta charging and the fund-above-minimum rule are unit-tested (minting to a minimum-funded player fails cleanly); async refunds still lack a resolver and interleaved-operation invariant proof is still missing.
+- Metadata JSON ABI: missing-token `None` array shape is unit-verified; exact on-chain view serialization still needs Testnet confirmation.
 - Resolver rollback/failure behavior has unit-only evidence, not runtime integration evidence.
-- Batch has a hard 10-token cap and rejects duplicate IDs; these restrictions need compatibility review. Arithmetic/storage edge cases need more tests.
-- Other storage registration semantics still need a standards pass.
+- Batch has a hard 10-token cap and rejects duplicate IDs and empty batches (all three rejections unit-tested); these documented MVP restrictions need compatibility review. Arithmetic/storage edge cases need more tests.
+- Other storage registration semantics still need a standards pass, plus a redeploy over live state needs a Borsh schema-compatibility check first (see `contracts/merchant/README.md` redeploy checklist).
 
 No compliance claim is made. Sandbox pass validates local mint/order/sale/withdraw flow only; it does not establish deployed-code match, receiver safety or NEP-245 compliance. No deployment or paid call without explicit approval.
 

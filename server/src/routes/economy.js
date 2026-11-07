@@ -1,4 +1,4 @@
-import { quote, sell } from '../services/market.js';
+import { quote, sell, invest, buyLicense, listFish, delistFish, buyFromShop, listShops } from '../services/market.js';
 import { missions, upgrade, claim, unlockZone, conservation } from '../services/player.js';
 const uuid={type:'string',format:'uuid'};
 const slug={type:'string',pattern:'^[a-z0-9_-]{1,80}$'};
@@ -15,15 +15,21 @@ export async function economyRoutes(app) {
   app.post('/api/player/missions/:id/claim',{...auth,schema:{params:body({id:slug}),body:body({})}},r=>claim(app.pg,r.player,r.params.id,key(r)));
   app.get('/api/player/zones',auth,async r=>(await app.pg.query(`SELECT z.*,z.id='reef' OR p.zone_id IS NOT NULL AS unlocked FROM zone_definitions z LEFT JOIN player_zones p ON p.zone_id=z.id AND p.player_id=$1 ORDER BY cost`,[id(r)])).rows);
   post('/api/player/zones/unlock',{zoneId:slug},r=>unlockZone(app.pg,r.player,r.body.zoneId,key(r)));
-  app.get('/api/market',auth,async()=>({settlement:'simulated_offchain',prices:(await app.pg.query('SELECT m.*,s.name FROM market_state m JOIN species s ON s.id=m.species_id ORDER BY species_id')).rows,merchant:(await app.pg.query('SELECT id,enabled,total_treasury,available_balance,reserved_balance,reserve_floor,max_order,max_tick,tick_spent FROM merchant_accounts ORDER BY id')).rows}));
+  app.get('/api/market',auth,async()=>({settlement:'simulated_offchain',prices:(await app.pg.query('SELECT m.*,s.name FROM market_state m JOIN species s ON s.id=m.species_id ORDER BY species_id')).rows,merchant:(await app.pg.query('SELECT id,enabled,total_treasury,available_balance,reserved_balance,reserve_floor,max_order,max_tick,tick_spent,bankrupt_at,invested_total FROM merchant_accounts ORDER BY id')).rows}));
   app.get('/api/market/quotes',{...auth,schema:{querystring:body({receiptId:uuid})}},r=>quote(app.pg,r.player,r.query.receiptId));
   post('/api/market/sell',{quoteId:uuid},r=>sell(app.pg,r.player,r.body.quoteId,key(r)));
+  post('/api/market/invest',{merchantId:slug,amount:{type:'integer',minimum:1,maximum:1000000000}},r=>invest(app.pg,r.player,r.body.merchantId,r.body.amount,key(r)));
+  app.get('/api/market/shops',auth,async r=>listShops(app.pg,id(r)));
+  post('/api/market/shops/license',{},r=>buyLicense(app.pg,r.player,key(r)));
+  post('/api/market/shops/list',{receiptId:uuid,price:{type:'integer',minimum:1,maximum:1000000000}},r=>listFish(app.pg,r.player,r.body.receiptId,r.body.price,key(r)));
+  post('/api/market/shops/delist',{listingId:uuid},r=>delistFish(app.pg,r.player,r.body.listingId,key(r)));
+  post('/api/market/shops/buy',{listingId:uuid},r=>buyFromShop(app.pg,r.player,r.body.listingId,key(r)));
   app.get('/api/market/orders',auth,async()=>(await app.pg.query(`SELECT d.species_id,s.name,s.base_price,p.population_count,p.capacity,d.desired_quantity,i.quantity AS stock,
     (SELECT a.detail->>'reason' FROM merchant_audit a WHERE a.merchant_id=m.id AND a.action='tick' AND a.detail->>'speciesId'=s.id ORDER BY a.created_at DESC LIMIT 1) AS price_reason,
     GREATEST(0,d.desired_quantity-i.quantity) AS needed,o.id AS order_id,
     CASE WHEN m.enabled AND o.quantity>0 AND o.expires_at>clock_timestamp() THEN o.quantity ELSE 0 END AS quantity,
     CASE WHEN m.enabled AND o.quantity>0 AND o.expires_at>clock_timestamp() THEN o.unit_price ELSE NULL END AS unit_price,
-    CASE WHEN NOT m.enabled THEN 'paused' WHEN i.quantity>=d.desired_quantity THEN 'fulfilled'
+    CASE WHEN m.bankrupt_at IS NOT NULL THEN 'bankrupt' WHEN NOT m.enabled THEN 'paused' WHEN i.quantity>=d.desired_quantity THEN 'fulfilled'
       WHEN o.quantity>0 AND o.expires_at>clock_timestamp() THEN 'open' ELSE 'waiting' END AS status
     FROM merchant_demand d JOIN merchant_accounts m ON m.id=d.merchant_id
     JOIN merchant_inventory i ON i.merchant_id=d.merchant_id AND i.species_id=d.species_id

@@ -28,6 +28,12 @@ pub struct Contract {
     merchant_inventory: LookupMap<String, u128>,
     demand: LookupMap<String, u128>,
     pending_withdrawals: UnorderedMap<AccountId, u128>,
+    // Session-key settlement (added 2026-11-07): server ed25519 public key that
+    // signs catch receipts, and the set of receipt IDs already settled on-chain.
+    // Appended at the end of the struct; a redeploy over live state still needs
+    // the Borsh schema check in contracts/merchant/README.md.
+    settlement_key: Option<Vec<u8>>,
+    used_receipts: LookupMap<String, u8>,
 }
 
 #[near(serializers = [borsh, json])]
@@ -73,7 +79,7 @@ impl Contract {
         require!(max_trade.0 > 0 && max_trade.0 <= MAX_LIMIT, "Invalid trade limit");
         require!(!name.is_empty() && name.len() <= 50 && !symbol.is_empty() && symbol.len() <= 10, "Invalid metadata");
         let metadata = FungibleTokenMetadata { spec: FT_METADATA_SPEC.to_string(), name, symbol, decimals: 0, icon: None, reference: None, reference_hash: None };
-        let mut contract = Self { owner: owner_id, merchant: merchant_id, treasury: treasury_id, max_trade: max_trade.0, token: FungibleToken::new(b"ft".to_vec()), metadata, assets: LookupMap::new(b"assets".to_vec()), mt_balances: LookupMap::new(b"mtb".to_vec()), pending_mt_transfers: LookupMap::new(b"mtp".to_vec()), mt_supply: LookupMap::new(b"mts".to_vec()), mt_metadata: UnorderedMap::new(b"mtm".to_vec()), mt_registered: LookupMap::new(b"mtr".to_vec()), storage_balances: UnorderedMap::new(b"stb".to_vec()), pending_storage_transfers: UnorderedMap::new(b"stp".to_vec()), storage_usage_baseline: 0, native_treasury: 0, paid_out: 0, reserved_orders: 0, seller_claims: UnorderedMap::new(b"claims".to_vec()), orders: UnorderedMap::new(b"orders".to_vec()), merchant_inventory: LookupMap::new(b"inventory".to_vec()), demand: LookupMap::new(b"demand".to_vec()), pending_withdrawals: UnorderedMap::new(b"withdraw".to_vec()) };
+        let mut contract = Self { owner: owner_id, merchant: merchant_id, treasury: treasury_id, max_trade: max_trade.0, token: FungibleToken::new(b"ft".to_vec()), metadata, assets: LookupMap::new(b"assets".to_vec()), mt_balances: LookupMap::new(b"mtb".to_vec()), pending_mt_transfers: LookupMap::new(b"mtp".to_vec()), mt_supply: LookupMap::new(b"mts".to_vec()), mt_metadata: UnorderedMap::new(b"mtm".to_vec()), mt_registered: LookupMap::new(b"mtr".to_vec()), storage_balances: UnorderedMap::new(b"stb".to_vec()), pending_storage_transfers: UnorderedMap::new(b"stp".to_vec()), storage_usage_baseline: 0, native_treasury: 0, paid_out: 0, reserved_orders: 0, seller_claims: UnorderedMap::new(b"claims".to_vec()), orders: UnorderedMap::new(b"orders".to_vec()), merchant_inventory: LookupMap::new(b"inventory".to_vec()), demand: LookupMap::new(b"demand".to_vec()), pending_withdrawals: UnorderedMap::new(b"withdraw".to_vec()), settlement_key: None, used_receipts: LookupMap::new(b"used".to_vec()) };
         let probe: AccountId = "a".repeat(64).parse().unwrap();
         let before = env::storage_usage();
         contract.token.internal_register_account(&probe);
@@ -201,6 +207,35 @@ impl Contract {
     #[payable]
     pub fn mint_asset(&mut self, asset_id: String, player_id: AccountId, species_id: String, title: String) {
         assert_one_yocto(); require!(env::predecessor_account_id() == self.owner, "Owner only");
+        self.mint_internal(asset_id, player_id, species_id, title);
+    }
+    // Session-key settlement: the server publishes one ed25519 public key; the
+    // game server signs each catch receipt (receipt_id, player, species, title)
+    // and the catcher submits it with their own function-call session key.
+    // The signature proves the catch is real; a receipt settles exactly once.
+    #[payable]
+    pub fn set_settlement_key(&mut self, public_key: String) {
+        assert_one_yocto(); require!(env::predecessor_account_id() == self.owner, "Owner only");
+        let key = hex_decode(&public_key).unwrap_or_default();
+        require!(key.len() == 32, "Bad settlement key");
+        self.settlement_key = Some(key);
+    }
+    #[payable]
+    pub fn mint_catch(&mut self, receipt_id: String, player_id: AccountId, species_id: String, title: String, signature: String) {
+        assert_one_yocto();
+        let server_key = self.settlement_key.clone().expect("Settlement key not set");
+        let server_key: &[u8; 32] = server_key.as_slice().try_into().expect("Bad settlement key");
+        require!(env::predecessor_account_id() == player_id, "Only the catcher can settle");
+        require!(self.used_receipts.get(&receipt_id).is_none(), "Receipt already settled");
+        let message = format!("{SETTLEMENT_MSG_DOMAIN}\n{receipt_id}\n{player_id}\n{species_id}\n{title}");
+        let signature = hex_decode(&signature).unwrap_or_default();
+        let signature: &[u8; 64] = signature.as_slice().try_into().expect("Bad signature");
+        require!(env::ed25519_verify(signature, message.as_bytes(), server_key), "Bad receipt signature");
+        self.used_receipts.insert(&receipt_id, &1);
+        // Token ID is the receipt itself, so one receipt can never mint two tokens.
+        self.mint_internal(receipt_id, player_id, species_id, title);
+    }
+    fn mint_internal(&mut self, asset_id: String, player_id: AccountId, species_id: String, title: String) {
         require!(valid_asset_id(&asset_id), "Invalid asset ID"); require!(valid_species(&species_id), "Invalid species"); require!(!title.is_empty() && title.len() <= 80, "Invalid title");
         require!(player_id != self.merchant && player_id != self.treasury, "Invalid player account");
         require!(self.token.accounts.get(&player_id).is_some(), "Player not registered");
@@ -281,7 +316,12 @@ impl StorageManagement for Contract {
 }
 #[near]
 impl Contract {
- // ponytail: registration bytes only; token-specific storage accounting remains a deployment blocker.
+ // Registration minimum = probe-measured baseline bytes (measured in new()).
+ // It covers one pending callback entry; every per-token balance/metadata
+ // write beyond that is charged to its owner by charge_storage_delta, and a
+ // write the owner cannot cover panics with "Insufficient storage balance"
+ // instead of minting an unfunded entry. Fund accounts above the minimum
+ // before minting or receiving (see contracts/merchant/README.md).
  fn storage_minimum(&self)->u128 { u128::from(self.storage_usage_baseline).checked_mul(env::storage_byte_cost().as_yoctonear()).expect("Storage minimum overflow") }
  // Deposit beyond the registration minimum and storage already charged to the account.
  fn storage_available(&self, id:&AccountId)->u128 { self.storage_balances.get(id).unwrap_or(0).saturating_sub(self.storage_minimum()).saturating_sub(self.mt_registered.get(id).unwrap_or(0)) }
@@ -314,5 +354,11 @@ fn validate_batch(ids: &[String], amounts: &[U128], approvals: Option<usize>) {
 fn valid_asset_id(s:&str)->bool{s.len()>=8&&s.len()<=64&&s.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-'||b==b'_')}
 fn valid_species(s:&str)->bool{!s.is_empty()&&s.len()<=40&&s.bytes().all(|b|b.is_ascii_lowercase()||b.is_ascii_digit()||b==b'-'||b==b'_')}
 fn valid_mt_id(s:&str)->bool{let mut p=s.splitn(2,':');let kind=p.next().unwrap_or("");let item=p.next().unwrap_or("");!kind.is_empty()&&kind.len()<=24&&kind.bytes().all(|b|b.is_ascii_lowercase()||b.is_ascii_digit()||b==b'-'||b==b'_')&&!item.is_empty()&&item.len()<=64&&item.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-'||b==b'_')}
+// Session-key settlement: the signed catch-receipt message. The server signs
+// exactly this string (newline-joined, domain first) with its ed25519 key;
+// mint_catch verifies it with env::ed25519_verify. Keep both sides in sync.
+const SETTLEMENT_MSG_DOMAIN: &str = "dsh-catch-v1";
+fn hex_byte(c: u8) -> Option<u8> { match c { b'0'..=b'9' => Some(c - b'0'), b'a'..=b'f' => Some(c - b'a' + 10), b'A'..=b'F' => Some(c - b'A' + 10), _ => None } }
+fn hex_decode(s: &str) -> Option<Vec<u8>> { let b = s.as_bytes(); if b.len() % 2 != 0 { return None; } let mut out = Vec::with_capacity(b.len() / 2); for pair in b.chunks(2) { out.push(hex_byte(pair[0])? << 4 | hex_byte(pair[1])?); } Some(out) }
 fn base_id(s:&str)->String{s.split(':').next().unwrap_or(s).to_string()}
 #[cfg(test)] mod tests;
