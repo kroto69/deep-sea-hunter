@@ -56,7 +56,7 @@ Failed attempts, all rolled back with only gas charged:
 
 Warning: `storage_deposit` with key `id` instead of `account_id` credits the caller (`8nXFm2Ph…`, `231wDNoh…`, `HE6FE841…`). Those deposits added 0.3 NEAR to the contract account's own storage balance.
 
-V2 `order-1` is filled, so don't retry it. `withdraw_proceeds`: no verified transaction hash is recorded yet (see the auto-mint section below) — do not cite a withdraw as tested until a hash exists.
+V2 `order-1` is filled, so don't retry it. `withdraw_proceeds` is now verified — see the auto-mint section below (tx `CQ8eSUfjDhjEuRnFnsnFfj3rCA4ucD4P9SfC6Sxc3mWu`, 0.009 NEAR to `flatrice4664.testnet`).
 
 ## Server-side auto-mint and merchant agent
 
@@ -73,7 +73,11 @@ Signer-path proof (server code, not a UI session):
 
 - Mint `39MA8pybrJbs7RiPwe71SzZ7sbJVXzZGPt69Xn2dq9gb` FINAL, `mt_mint` event for `fish:catch-e2e-1794044371726`, `mt_balance_of` = 1.
 - Order `21DLCzejiTPJLju6Ccj1kEtufZ9rYa9wGdUAoGqFHJXt` FINAL, reserve 0.009 NEAR, `treasury_available` 0.99 → 0.981 NEAR.
-- Player sale and withdraw through the UI — UNVERIFIED, no transaction hash recorded: `mt_balance_of` player 1 → 0, merchant desk 0 → 1, `merchant_inventory` = 1, order `active=false`, `reserved_orders` 0, `paid_out` 0.009 NEAR, `seller_claim` 0, `accounting_invariant` true. These are reported state values only; per `docs/DEPLOYMENT.md` §7 a claim without a hash does not count. (The owner also reported on 2026-11-07 that "wd + sell" were tested on-chain on the newest branch — that report is likewise unverified: no tx hash, contract account, or code hash was supplied.)
+- Player sale and withdraw through the UI — VERIFIED 2026-11-07 (read directly from Nearblocks Testnet, both FINAL + Success):
+  - Sale: `2er8mzfvHt7k5Se3QV5ub7TyqvSHFtFooTpfTPCSvDoH`, block 276613988, 2026-11-07 09:42:24 UTC. Signer `flatrice4664.testnet`, receiver `dsh-merchant-v2.deepfish-owner.testnet`. Method `accept_purchase_order`, args `{"amount":"1","order_id":"order-fish:catch-e2e-1794044371726"}`. Receipt emitted NEP-245 `mt_transfer` for `fish:catch-e2e-1794044371726`, amount 1, player → merchant desk.
+  - Withdraw: `CQ8eSUfjDhjEuRnFnsnFfj3rCA4ucD4P9SfC6Sxc3mWu`, block 276614062, 2026-11-07 09:43:07 UTC (~43 s after the sale). Signer `flatrice4664.testnet`, receiver `dsh-merchant-v2.deepfish-owner.testnet`. Method `withdraw_proceeds`; receipt transferred 0.009 NEAR contract → player, and `resolve_withdrawal` returned true (`{"amount":"9000000000000000000000","seller":"flatrice4664.testnet"}`).
+  - The reported state values are confirmed: `mt_balance_of` player 1 → 0, merchant desk 0 → 1, `merchant_inventory` = 1, order `active=false`, `reserved_orders` 0, `paid_out` 0.009 NEAR, `seller_claim` 0, `accounting_invariant` true. (The player also received ~0.100268 NEAR of storage refunds from system receipts inside the same two transactions — refunded storage, not sale proceeds.)
+  - Both transactions hit `dsh-merchant-v2` — no redeploy happened; the merged branch code (with `mint_catch`) is still not live on-chain.
 
 Rules the server enforces:
 

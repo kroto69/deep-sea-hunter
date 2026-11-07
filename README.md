@@ -31,7 +31,7 @@ Flow diagram (same stages, visual): [`docs/flow-settlement-invisible.html`](docs
 | 4 Player shops | BUILT | License/list/buy/delist endpoints + escrow + supply-aware pricing + Hub UI (SHOPS tab, 2026-11-07: license, list at own price, delist, buy, market board). On-chain settlement of shop sales NOT built (transfer leg, slice 3). |
 | 5 NEAR-tab token sell | BUILT (Testnet) | `accept_purchase_order` verified FINAL on v1 + v2. |
 | 6 Tick + Fast Forward | BUILT | 60 s market tick; Fast Forward simulates 7 days in 1 minute, local only. |
-| 7 Withdraw CR → NEAR | NOT BUILT (CR→NEAR flow) | Rate exists in code (1 CR = 0.0005 NEAR, agent conversion); the CR→NEAR conversion flow + funding source are undecided. The NEAR tab already has a WITHDRAW NEAR button that pays an existing on-chain seller claim via `withdraw_proceeds` — that call is unverified (no transaction hash recorded). |
+| 7 Withdraw CR → NEAR | NOT BUILT (CR→NEAR flow) | Rate exists in code (1 CR = 0.0005 NEAR, agent conversion); the CR→NEAR conversion flow + funding source are undecided. The NEAR tab already has a WITHDRAW NEAR button that pays an existing on-chain seller claim via `withdraw_proceeds` — verified 2026-11-07 on v2 Testnet (withdraw tx `CQ8eSUfjDhjEuRnFnsnFfj3rCA4ucD4P9SfC6Sxc3mWu`, 0.009 NEAR to `flatrice4664.testnet`; sale tx `2er8mzfvHt7k5Se3QV5ub7TyqvSHFtFooTpfTPCSvDoH`). |
 
 Background music: "Deep Ocean" by MeditationSpiritual (Pixabay, royalty-free), bundled as `audio/deep-ocean.mp3` (6:44, 128 kbps, ~6 MB — compressed from the 256 kbps / ~12 MB original), looped at 60% volume, starts on the first click; MUSIC ON/OFF button under WALLET. The static site serves it (`render.yaml` copies `audio/` to `dist/`).
 
