@@ -15,6 +15,7 @@
 // reads config.settlementSigningKey at call time.
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { fail } from './transaction.js';
+import { view } from './near.js';
 import { config } from '../config/env.js';
 
 export const SETTLEMENT_MSG_DOMAIN = 'dsh-catch-v1';
@@ -67,12 +68,43 @@ export function verifyReceiptSignature({ publicKeyHex, message, signatureHex }) 
 export async function receiptSignature(db, identity, receiptId) {
   if (!config.settlementSigningKey) fail('settlement_not_configured', 503);
   if (!config.merchantContractId) fail('merchant_contract_not_configured', 503);
-  const { rows: [r] } = await db.query(`SELECT r.id, r.species_id, r.status, r.expires_at, s.name AS species_name, p.wallet_account
+  const { rows: [r] } = await db.query(`SELECT r.id, r.species_id, r.status, r.expires_at, r.token_id, s.name AS species_name, p.wallet_account
     FROM catch_receipts r JOIN species s ON s.id = r.species_id JOIN players p ON p.id = r.player_id
     WHERE r.id = $1 AND r.player_id = $2`, [receiptId, identity.id]);
   if (!r) fail('receipt_not_found', 404);
   if (r.status !== 'valid' || Date.parse(r.expires_at) <= Date.now()) fail('receipt_unavailable');
   if (!r.wallet_account) fail('wallet_not_verified', 401);
   const { signature } = signReceipt({ seedHex: config.settlementSigningKey, receiptId: r.id, playerId: r.wallet_account, speciesId: r.species_id, title: r.species_name });
-  return { receipt_id: r.id, player_id: r.wallet_account, species_id: r.species_id, title: r.species_name, signature, contractId: config.merchantContractId };
+  return { receipt_id: r.id, player_id: r.wallet_account, species_id: r.species_id, title: r.species_name, signature, contractId: config.merchantContractId, tokenId: r.token_id || null };
+}
+
+// POST /api/near/record-mint — after the browser mints via mint_catch,
+// record the token on the receipt so quote()/sell() refuse the off-chain CR
+// sale of a tokenized fish. The token id is deterministic for session-key
+// mints (fish:{receiptId}), and the server verifies on-chain via
+// mt_balance_of that the token really sits in the catcher's wallet, so a
+// client cannot claim a token that was never minted. Already-recorded
+// receipts return idempotently without a chain call (e.g. operator
+// auto-mint wrote fish:catch-{receiptId} first).
+// Residual: this closes the hole for honest clients. A modified client could
+// skip the record call and still sell off-chain; full robustness needs an
+// on-chain ownership check inside sell() itself (not built).
+export async function recordMint(db, identity, receiptId, viewFn = view) {
+  if (!config.merchantContractId) fail('merchant_contract_not_configured', 503);
+  const { rows: [r] } = await db.query(`SELECT r.id, r.status, r.expires_at, r.token_id, p.wallet_account
+    FROM catch_receipts r JOIN players p ON p.id = r.player_id
+    WHERE r.id = $1 AND r.player_id = $2`, [receiptId, identity.id]);
+  if (!r) fail('receipt_not_found', 404);
+  if (r.token_id) return { receiptId: r.id, tokenId: r.token_id, recorded: false };
+  if (r.status !== 'valid' || Date.parse(r.expires_at) <= Date.now()) fail('receipt_unavailable');
+  if (!r.wallet_account) fail('wallet_not_verified', 401);
+  const tokenId = `fish:${r.id}`;
+  const { value } = await viewFn('mt_balance_of', { account_id: r.wallet_account, token_id: tokenId }, config.merchantContractId);
+  if (BigInt(value ?? 0) < 1n) fail('token_not_minted', 409);
+  const { rowCount } = await db.query('UPDATE catch_receipts SET token_id=$2 WHERE id=$1 AND token_id IS NULL', [tokenId, r.id]);
+  if (!rowCount) {
+    const { rows: [again] } = await db.query('SELECT token_id FROM catch_receipts WHERE id=$1', [r.id]);
+    return { receiptId: r.id, tokenId: again?.token_id || tokenId, recorded: false };
+  }
+  return { receiptId: r.id, tokenId, recorded: true };
 }

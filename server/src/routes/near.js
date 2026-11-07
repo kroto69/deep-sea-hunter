@@ -1,6 +1,6 @@
 import { config } from '../config/env.js';
 import { challenge,bindWallet,view,reconcile,verifyMerchantTransaction } from '../services/near.js';
-import { receiptSignature, settlementPublicKey } from '../services/settlement.js';
+import { receiptSignature, recordMint, settlementPublicKey } from '../services/settlement.js';
 import { fail } from '../services/transaction.js';
 import { chainState, signerAvailable } from '../services/merchant-agent.js';
 const text=(max=100)=>({type:'string',minLength:1,maxLength:max});
@@ -32,6 +32,9 @@ export async function nearRoutes(app){
  // for mint_catch. The key itself never leaves the server.
  app.get('/api/near/settlement-key',()=>{if(!config.settlementSigningKey)fail('settlement_not_configured',503);return {publicKey:settlementPublicKey(config.settlementSigningKey),contractId:config.merchantContractId};});
  app.post('/api/near/receipt-signature',{...auth,schema:{body:body({receiptId:uuid})}},r=>receiptSignature(app.pg,r.player,r.body.receiptId));
+ // After the browser mints via mint_catch, record the token on the receipt
+ // so the off-chain CR sale refuses a tokenized fish (see settlement.js).
+ app.post('/api/near/record-mint',{...auth,schema:{body:body({receiptId:uuid})}},r=>recordMint(app.pg,r.player,r.body.receiptId));
  app.get('/api/merchant-chain/transactions/:hash',{schema:{params:body({hash:{type:'string',pattern:'^[1-9A-HJ-NP-Za-km-z]{43,44}$'}}),querystring:body({accountId:{type:'string',pattern:'^[a-z0-9][a-z0-9_.-]{0,62}[a-z0-9]$'}})}},async r=>{
    if(!config.merchantContractId)fail('merchant_contract_not_configured',503);
    return verifyMerchantTransaction(r.params.hash,r.query.accountId);

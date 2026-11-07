@@ -56,3 +56,24 @@ test('receipt-signature endpoint signs the caller\'s own valid receipt', { skip:
   const noWallet = await other.req('POST', '/api/near/receipt-signature', { receiptId: otherReceipt });
   assert.equal(noWallet.statusCode, 401, noWallet.body); assert.equal(noWallet.json().error, 'wallet_not_verified');
 });
+
+test('record-mint refuses unknown and foreign receipts', { skip: !process.env.TEST_DATABASE_URL }, async t => {
+  const { testDatabase } = await import('./database.js');
+  const { buildApp } = await import('../src/app.js');
+  const f = await testDatabase(), db = f.db, app = buildApp(db); t.after(async () => { await app.close(); await f.close(); });
+  const guest = async () => {
+    const u = (await app.inject({ method: 'POST', url: '/api/sessions/guest' })).json();
+    return { player: u.player, req: (method, url, payload) => app.inject({ method, url, payload, headers: { authorization: `Bearer ${u.token}`, 'idempotency-key': randomUUID() } }) };
+  };
+  const seller = await guest(), other = await guest();
+  await db.query("UPDATE players SET wallet_account='demo.testnet' WHERE id=$1", [seller.player.id]);
+  const hunt = (await seller.req('POST', '/api/hunts', { habitatId: 'coral' })).json();
+  await db.query("UPDATE player_equipment SET last_shot_at=clock_timestamp()-interval '2 seconds' WHERE player_id=$1", [seller.player.id]);
+  const shot = await seller.req('POST', `/api/hunts/${hunt.id}/shots`, { shotId: randomUUID(), speciesId: 'clownfish' });
+  assert.equal(shot.statusCode, 201, shot.body);
+  const receiptId = shot.json().receipt.id;
+  // Another player cannot record a receipt they do not own.
+  assert.equal((await other.req('POST', '/api/near/record-mint', { receiptId })).statusCode, 404);
+  // Unknown receipt.
+  assert.equal((await seller.req('POST', '/api/near/record-mint', { receiptId: randomUUID() })).statusCode, 404);
+});

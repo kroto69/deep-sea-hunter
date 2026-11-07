@@ -83,26 +83,44 @@ export class OnlineGame {
   settlementHistoryKey(){return 'dsh.settlement.history';}
   pendingSettlements(){try{return JSON.parse(localStorage.getItem(this.settlementPendingKey())||'[]');}catch{return[];}}
   settlementHistory(){try{return JSON.parse(localStorage.getItem(this.settlementHistoryKey())||'[]');}catch{return[];}}
-  queueSettlementReceipt(receiptId){const list=this.pendingSettlements();if(!list.some(p=>p.receiptId===receiptId))list.push({receiptId,queuedAt:Date.now()});try{localStorage.setItem(this.settlementPendingKey(),JSON.stringify(list));}catch{}}
+  queueSettlementReceipt(receiptId,minted=false,hash=null){const list=this.pendingSettlements();const existing=list.find(p=>p.receiptId===receiptId);if(existing){existing.minted=existing.minted||minted;if(hash)existing.hash=hash;}else list.push({receiptId,queuedAt:Date.now(),minted,hash});try{localStorage.setItem(this.settlementPendingKey(),JSON.stringify(list));}catch{}}
   dropPendingSettlement(receiptId){try{localStorage.setItem(this.settlementPendingKey(),JSON.stringify(this.pendingSettlements().filter(p=>p.receiptId!==receiptId)));}catch{}}
   recordSettlement(entry){try{localStorage.setItem(this.settlementHistoryKey(),JSON.stringify([{...entry,at:Date.now()},...this.settlementHistory()].slice(0,50)));}catch{}}
+  // One receipt, end to end: sign → mint via session key → record the token
+  // on the receipt so the off-chain CR sale refuses it. If the operator
+  // already minted it (signed.tokenId set), there is nothing to settle.
+  async settleOneReceipt(receiptId){
+    const signed=await this.post('/api/near/receipt-signature',{receiptId});
+    if(signed.tokenId){this.dropPendingSettlement(receiptId);return {alreadyTokenized:true};}
+    const result=await settleCatch({contractId:signed.contractId,receipt:signed});
+    try{
+      await this.post('/api/near/record-mint',{receiptId});
+    }catch{
+      // Minted on-chain, but the backend does not know yet: keep the receipt
+      // queued as minted so the next flush only records it.
+      this.queueSettlementReceipt(receiptId,true,result.hash);
+      return {hash:result.hash,recorded:false};
+    }
+    this.recordSettlement({receiptId,hash:result.hash,status:'settled'});
+    this.dropPendingSettlement(receiptId);
+    return {hash:result.hash,recorded:true};
+  }
   async settleCatchInBackground(receiptId){
     if(!hasSessionKey()){this.queueSettlementReceipt(receiptId);return;}
-    try{
-      const signed=await this.post('/api/near/receipt-signature',{receiptId});
-      const result=await settleCatch({contractId:signed.contractId,receipt:signed});
-      this.recordSettlement({receiptId,hash:result.hash,status:'settled'});
-      this.dropPendingSettlement(receiptId);
-    }catch{this.queueSettlementReceipt(receiptId);}
+    try{await this.settleOneReceipt(receiptId);}
+    catch{this.queueSettlementReceipt(receiptId);}
   }
   async flushPendingSettlements(){
     if(!hasSessionKey())return;
     for(const item of this.pendingSettlements()){
       try{
-        const signed=await this.post('/api/near/receipt-signature',{receiptId:item.receiptId});
-        const result=await settleCatch({contractId:signed.contractId,receipt:signed});
-        this.recordSettlement({receiptId:item.receiptId,hash:result.hash,status:'settled'});
-        this.dropPendingSettlement(item.receiptId);
+        if(item.minted){
+          await this.post('/api/near/record-mint',{receiptId:item.receiptId});
+          this.recordSettlement({receiptId:item.receiptId,hash:item.hash||null,status:'settled'});
+          this.dropPendingSettlement(item.receiptId);
+          continue;
+        }
+        await this.settleOneReceipt(item.receiptId);
       }catch(error){
         // A receipt that can never settle (sold, expired, gone) leaves the
         // queue so it cannot retry forever; anything else stays queued.
@@ -241,7 +259,7 @@ export class OnlineGame {
     if(this.hub.tab==='chain'&&!this.walletId){html+=`<div class="market-intro"><h3>NEAR Testnet</h3><p>Connect wallet to view and use on-chain merchant.</p>${button('wallet','CONNECT WALLET')}</div>`;this.hub.body.innerHTML=html;return;}
     if(!this.active&&this.hub.tab!=='chain'){html+=`<div class="market-intro"><h3>Dock Merchant</h3><p>Online orders and credits use a separate Guest session. Offline catch stays in your saved game.</p>${button('connect','PLAY ONLINE GUEST')}</div>`;this.hub.body.innerHTML=html;return;}
     if(this.hub.tab==='economy'){
-      html+='<h3>Economy loop</h3><p>BACKEND OFF-CHAIN: dive Coral, catch supported fish, sync, review orders, sell chosen fish. Merchant stock rises and treasury falls; next market tick recalculates prices and orders. Use unmet demand to plan the next dive.</p><p>NEAR TESTNET MERCHANT: wallet actions available in NEAR tab. Catches are not minted on-chain; Testnet assets are separate from CR and PostgreSQL economy. Transaction finality is checked against Testnet RPC.</p>';
+      html+='<h3>Economy loop</h3><p>BACKEND OFF-CHAIN: dive Coral, catch supported fish, sync, review orders, sell chosen fish. Merchant stock rises and treasury falls; next market tick recalculates prices and orders. Use unmet demand to plan the next dive.</p><p>NEAR TESTNET MERCHANT: wallet actions available in NEAR tab. Catches mint on-chain as NEP-245 tokens when server auto-mint is on or invisible settlement is approved; gameplay credits remain off-chain.</p>';
       html+=`<p>Backend merchant treasury: ${esc(merchant?.available_balance??'Unavailable')} CR · player balance: ${esc(this.profile?.balance??'Unavailable')} CR</p>${investBox}<h3>Merchant inventory and active orders · OFF-CHAIN</h3>${orderRows}<h3>Your fish · OFF-CHAIN</h3>${inventoryRows}<h3>Backend settlement history · not blockchain transactions</h3>${history}`;
     }else if(this.hub.tab==='online'){
       html+=`<div class="merchant-head"><span class="merchant-portrait" aria-hidden="true"></span><div><small>MARKET OVERVIEW</small><h3>Dock Merchant</h3></div>${merchantBadge}</div>${investBox}`;

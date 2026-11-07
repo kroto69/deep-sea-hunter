@@ -197,3 +197,20 @@ Remains (do not claim the loop is live):
 4. Redeploy of the merchant contract (new struct fields) — needs approval,
    the Borsh check, and the `storage_balance_of` `{id}` → `{account_id}`
    server change in the same release.
+
+### Record-mint (2026-11-07, merged branch)
+
+After the browser mints via `mint_catch`, it calls
+`POST /api/near/record-mint {receiptId}`. The server verifies on-chain
+(`mt_balance_of` for `fish:{receiptId}` in the catcher's wallet) and writes
+the token id into `catch_receipts.token_id`, so `quote()`/`sell()` refuse
+the off-chain CR sale of a tokenized fish. Already-recorded receipts return
+idempotently. The operator auto-mint path skips receipts whose `token_id`
+is already set, and the browser skips minting when `receipt-signature`
+reports a `tokenId` — the two mint paths are mutually exclusive per
+receipt. A mint that succeeds but whose record call fails stays queued as
+`minted` in localStorage and retries only the record on next launch.
+
+Residual: this closes the hole for honest clients. A modified client could
+skip the record call and still sell off-chain; full robustness needs an
+on-chain ownership check inside `sell()` itself (not built).

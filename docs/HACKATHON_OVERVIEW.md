@@ -34,16 +34,16 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 Historical collectibles deployment details remain in `PROJECT_STATUS.md`; they do not verify merchant activity. Collectible page provides NFT/marketplace operations; unit/Sandbox tests do not prove player transactions on Testnet.
 
-There is currently no verified flow linking a unique capture to a one-time mint. One merchant sale finalized on Testnet (`accept_purchase_order`); this does not link a game catch to a token mint. Mint metadata does not prove species, rarity, or capture. Capture rarity progression remains future work.
+A unique capture now links to a one-time mint two ways: operator auto-mint mints `fish:catch-{receipt}` on v2 Testnet (verified mint tx `2pqUogkLHs87YrPErYJAgoZ4Dp8WsjfPCPTncVh7SGwT`, see `docs/ONCHAIN_ECONOMY_PROOF.md` Merchant v2), and receipt-verified `mint_catch` mints `fish:{receipt}` from the player's session key (implemented locally, needs a redeploy — deployed v2 has no `mint_catch`). One merchant sale finalized on Testnet (`accept_purchase_order`); this does not link a game catch to a token sale — the sell/buy transfer leg is still missing. Mint metadata does not prove species, rarity, or capture. Capture rarity progression remains future work.
 
-This review does not verify any Testnet mint, listing, buy, or transfer. Check finalized RPC/Explorer status before claiming a transaction. New deployment, initialization, or funding requires owner approval.
+This review does not verify any Testnet listing, buy, or transfer. Check finalized RPC/Explorer status before claiming a transaction. New deployment, initialization, or funding requires owner approval.
 
 ## Not yet available / future direction
 
-- Google OAuth and Email OTP: planned; waiting for credentials and email delivery provider.
+- Google OAuth and Email OTP: intentionally skipped — Guest play instead; the track's social/email login requirement is scored missing by design.
 - Permanent player profiles and cross-device cloud saves: planned.
 - Mobile portrait and real-device optimization: require testing.
-- Capture identity, five-tier rarity, one-time NFT mint: require design and implementation.
+- Capture identity and five-tier rarity: require design and implementation. One-time NFT mint is implemented (operator auto-mint verified on v2 Testnet; receipt-verified `mint_catch` local, needs redeploy).
 - Player-to-player marketplace: separate work from the current Merchant Market.
 - Deep Sea Hunter memecoin: future only, not MVP; no creation without owner approval.
 - Merchant NEP-245 compliance, catch-backed minting, and confirmed Testnet trade flow: unverified; see `../contracts/merchant/README.md`.
