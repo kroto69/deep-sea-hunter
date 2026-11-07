@@ -1,5 +1,5 @@
 import { testnetWallet, walletAccount, selectWallet, selectedWallet, WALLETS } from './wallet.js';
-const $=id=>document.getElementById(id),base='http://127.0.0.1:3000';
+const $=id=>document.getElementById(id),base='https://deep-sea-hunter-api.onrender.com';
 let config,busy=false;
 const status=text=>{$('status').textContent=text;};
 async function api(path,body){const response=await fetch(base+path,{method:body?'POST':'GET',headers:{authorization:`Bearer ${sessionStorage.getItem('dsh.online.token')||''}`,...(body&&{'content-type':'application/json'})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);return result;}

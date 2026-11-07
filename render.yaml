@@ -1,0 +1,71 @@
+# Deep Sea Hunter — Render Blueprint (satu paket, diputuskan 2026-11-07)
+# API Docker + Postgres free + frontend statis, semua di Render.
+# Cara pakai: push repo (commit lokal 52a88f3 + 229cb39 + yang ini masih BELUM push),
+# lalu di Render Dashboard > New > Blueprint > pilih repo ini.
+#
+# Yang masih harus diisi manual:
+#   1. ALLOWED_ORIGIN — isi URL frontend statis (https://deep-sea-hunter.onrender.com)
+#      Render akan menanyakannya saat Blueprint pertama dibuat (sync: false).
+#   2. Cek URL API setelah Blueprint dibuat. API base di index.html + js/collectibles.js
+#      sudah diarahkan ke https://deep-sea-hunter-api.onrender.com. Kalau Render
+#      mengganti nama service (nama sudah dipakai orang lain), URL aslinya beda —
+#      beri tahu bro URL aslinya, bro betulkan 2 baris itu dan push lagi.
+#   3. Sekali saja setelah DB pertama dibuat, jalankan di Render Shell: npm run seed
+#      (isi 19 spesies + Dock Merchant treasury 10.000 CR; idempotent).
+#
+# Catatan plan: Free Web Service tidur setelah ~15 menit tanpa request — tick 60 detik
+# ikut berhenti dan request pertama jadi lambat. Buat demo/penjurian pakai Starter
+# (tetap hidup) supaya ekonomi jalan terus. DB Free Postgres: 1 GB, 90 hari.
+# API_PORT dijembatani dari $PORT Render karena server/src/config/env.js hanya
+# membaca API_PORT (bukan PORT). API_HOST 0.0.0.0 wajib supaya bisa dijangkau Render.
+# Frontend statis TIDAK butuh build tool: buildCommand hanya menyalin file yang
+# dimainkan (index.html, style.css, js/) ke dist/ supaya server/, contracts/,
+# docs/ tidak ikut ter-publish.
+services:
+  - type: web
+    name: deep-sea-hunter-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /ready
+    startCommand: API_PORT=$PORT npm run migrate && API_PORT=$PORT npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deep-sea-hunter-db
+          property: connectionString
+      - key: ALLOWED_ORIGIN
+        sync: false
+      - key: MERCHANT_INITIAL_TREASURY
+        value: 10000
+      - key: MARKET_TICK_SECONDS
+        value: 60
+      - key: POPULATION_TICK_SECONDS
+        value: 60
+      - key: CATCH_SESSION_TTL_SECONDS
+        value: 300
+      - key: CATCH_MAX_SHOTS
+        value: 30
+      - key: NEAR_NETWORK
+        value: testnet
+      - key: NEAR_RPC_URL
+        value: https://rpc.testnet.near.org
+      - key: NEAR_CONTRACT_ID
+        value: deepfish-contract.testnet
+
+  - type: static
+    name: deep-sea-hunter
+    plan: free
+    buildCommand: mkdir -p dist && cp index.html style.css dist/ && cp -r js dist/
+    staticPublishPath: ./dist
+
+databases:
+  - name: deep-sea-hunter-db
+    databaseName: deepfish
+    user: deepfish
+    plan: free
