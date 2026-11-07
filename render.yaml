@@ -1,6 +1,6 @@
 # Deep Sea Hunter — Render Blueprint (satu paket, diputuskan 2026-11-07)
 # API Docker + Postgres free + frontend statis, semua di Render.
-# Cara pakai: push branch feat/auto-mint-merchant-agent (12 commit di depan
+# Cara pakai: push branch feat/auto-mint-merchant-agent (19 commit di depan
 # origin, BELUM push), lalu di Render Dashboard > New > Blueprint > pilih repo ini.
 #
 # Yang masih harus diisi manual:
@@ -54,9 +54,14 @@ services:
       - key: NEAR_NETWORK
         value: testnet
       - key: NEAR_RPC_URL
-        value: https://rpc.testnet.near.org
+        value: https://test.rpc.fastnear.com
       - key: NEAR_CONTRACT_ID
         value: deepfish-contract.testnet
+      # Deployed merchant contract account — fill in the Render dashboard at
+      # Blueprint creation; without it the NEAR tab and merchant-chain
+      # endpoints return merchant_contract_not_configured (503).
+      - key: NEAR_MERCHANT_CONTRACT_ID
+        sync: false
 
   - type: static
     name: deep-sea-hunter

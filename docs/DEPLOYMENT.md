@@ -150,7 +150,12 @@ curl http://127.0.0.1:3000/ready
 1. Push the branch to GitHub.
 2. Render Dashboard → New → Blueprint → pick the repo.
 3. When asked, fill `ALLOWED_ORIGIN` with the static site URL
-   (e.g. `https://deep-sea-hunter.onrender.com`).
+   (e.g. `https://deep-sea-hunter.onrender.com`), and fill
+   `NEAR_MERCHANT_CONTRACT_ID` with the deployed merchant contract account
+   (it is a `sync: false` env var in `render.yaml`, so Render asks for it at
+   Blueprint creation). `SETTLEMENT_SIGNING_KEY`, `AUTO_MINT_ENABLED`, and
+   `NEAR_MERCHANT_OWNER_ID` are not in `render.yaml`; add them manually in
+   the Render dashboard if you want invisible settlement / auto-mint.
 4. After the first deploy, run `npm run seed` once in the Render Shell if
    you did not seed already.
 5. **Check the real API URL.** The frontend hardcodes the API base in two
@@ -193,10 +198,11 @@ API — temporarily change it to `http://127.0.0.1:3000` (or delete it) and
   machine; do not copy it to the Render host (Render only needs the
   `SETTLEMENT_SIGNING_KEY` seed and the public contract ID).
 - Redeploying over live state risks Borsh corruption — fresh deploy is the
-  default. If you do redeploy, change the server's `storage_balance_of`
-  argument from `{id}` to `{account_id}` in the same release: the deployed
-  code expects `{id}`, the current source expects `{account_id}`, and the
-  NEAR tab storage read breaks if they disagree.
+  default. `storage_balance_of` needs no server change on redeploy: the
+  server already sends `{account_id}` (`server/src/routes/near.js`),
+  matching both the current contract source and deployed v2. The `{id}`
+  form was only for deployed v1 (now superseded) — if you point the server
+  at a contract that expects `{id}`, the NEAR tab storage read breaks.
 - No deployment, initialization, funding, or paid call without the owner's
   explicit approval. Never retry a paid transaction while its status is
   unknown.

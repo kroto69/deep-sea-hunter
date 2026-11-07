@@ -85,12 +85,13 @@ reason show it.
 
 A shop sale is an off-chain CR trade in slice 1, with the receipt ID, price,
 and both parties recorded — exactly what the session-key settlement needs.
-When the server receipt-signing endpoint lands
-(`docs/SETTLEMENT_SESSION_KEYS.md`), the loop becomes: catch → `mint_catch`
-(via the buyer's... no — via the catcher's session key, at catch time) →
-shop sale transfers the token with the seller's session key
-(`mt_transfer`, memo carries the listing ID and price). Until then, do not
-claim shop sales settle on-chain.
+The server receipt-signing endpoint already exists (slice 2,
+`docs/SETTLEMENT_SESSION_KEYS.md`); what is still missing is only the
+transfer leg (slice 3). Once it lands, the loop becomes: catch →
+`mint_catch` (via the catcher's session key, at catch time) → shop sale
+transfers the token with the seller's session key (`mt_transfer`, memo
+carries the listing ID and price). Until then, do not claim shop sales
+settle on-chain.
 
 ## What is NOT in slice 1
 

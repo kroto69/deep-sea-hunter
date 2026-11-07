@@ -48,7 +48,7 @@
 <body>
 <div class="wrap">
   <h1>Alur sekarang<br>Deep Sea Hunter</h1>
-  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar cuma tiga momen: approve sekali + storage sekali di awal, dan withdraw di akhir. Sisanya transaksi on-chain jalan di belakang layar. Branch: <b>feat/auto-mint-merchant-agent</b> (merge, 11 commit di depan origin).</p>
+  <p class="sub">Satu kalimat: <b>user main seperti biasa.</b> Yang dia sadar cuma tiga momen: approve sekali + storage sekali di awal, dan withdraw di akhir. Sisanya transaksi on-chain jalan di belakang layar. Branch: <b>feat/auto-mint-merchant-agent</b> (merge, 19 commit di depan origin).</p>
 
   <div class="legend">
     <span class="pill"><span class="dot g"></span> Sudah dibangun</span>
@@ -142,7 +142,7 @@
 
     <div class="step next">
       <div class="card">
-        <h2><span class="num">4.</span>Toko pemain — marketplace mothership<span class="badge next">BACKEND JALAN · UI BELUM</span></h2>
+        <h2><span class="num">4.</span>Toko pemain — marketplace mothership<span class="badge next">BACKEND JALAN · UI SUDAH (slice 2)</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
           <ul>
             <li>Beli lisensi <b>500 CR</b> → buka toko → listing ikan, harga bebas</li>
@@ -153,7 +153,7 @@
           <ul>
             <li>Swap atomik CR ↔ receipt (ledger <code>shop_sale</code>); listing = escrow dari merchant</li>
             <li>Tick: <code>marketStock</code> = stok merchant + listing aktif → ikan toko menekan harga seperti stok merchant</li>
-            <li>Settlement on-chain penjualan toko butuh transfer leg (slice 3); UI hub belum dibangun</li>
+            <li>Settlement on-chain penjualan toko butuh transfer leg (slice 3); UI hub sudah dibangun (slice 2, tab SHOPS)</li>
           </ul>
         </div>
       </div>
@@ -197,7 +197,7 @@
       <div class="card">
         <h2><span class="num">7.</span>Withdraw CR → NEAR — di sinilah user “ketemu” chain<span class="badge open">BELUM DIPUTUSKAN</span></h2>
         <div class="lane see"><span class="tag">YANG USER LIHAT</span>
-          <ul><li>Layar withdraw → pilih jumlah CR → NEAR masuk wallet.</li></ul>
+          <ul><li>Tombol WITHDRAW NEAR di tab NEAR → bayar klaim seller on-chain via withdraw_proceeds (belum terverifikasi — belum ada tx hash). Flow pilih-jumlah-CR → NEAR belum diputuskan.</li></ul>
         </div>
         <div class="lane chain"><span class="tag">DI BELAKANG LAYAR</span>
           <ul>

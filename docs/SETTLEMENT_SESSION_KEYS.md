@@ -33,7 +33,7 @@ keeps the player as signer, which is also the more player-owned design.
 |---|---|---|
 | Player full-access key | Player's wallet | Everything (never touched by the game) |
 | Session key (ed25519) | Game frontend, `localStorage` | Only the allow-listed methods, only on the merchant contract, only 1 yocto deposit, gas capped by the allowance |
-| Server settlement key (ed25519) | Game server (NOT in this repo yet) | Signs catch receipts so the contract knows a catch is real; never signs transactions |
+| Server settlement key (ed25519) | Game server (`server/src/services/settlement.js`, seed in `SETTLEMENT_SIGNING_KEY`) | Signs catch receipts so the contract knows a catch is real; never signs transactions |
 | Contract owner key | Game operator | `mint_asset`, `set_settlement_key`, treasury funding |
 
 ## Key lifecycle
@@ -95,10 +95,10 @@ valid on-chain.
 
 1. The player catches a fish; the server issues a catch receipt (already
    exists: `catch_receipts` + `inventory_receipts` tables) and signs it with
-   the server settlement key. **The signing endpoint does not exist yet** —
-   it is the next build step (`POST /api/near/receipt-signature`, returning
+   the server settlement key. The signing endpoint exists (`POST
+   /api/near/receipt-signature`, returning
    `{receipt_id, player_id, species_id, title, signature}` for a receipt the
-   caller owns).
+   caller owns) — built in slice 2.
 2. The frontend calls `mint_catch` with the session key. The token lands in
    the player's on-chain balance; the receipt is marked used on-chain.
 3. The sell flow then transfers that token: the player's session key calls
@@ -194,9 +194,11 @@ Remains (do not claim the loop is live):
    by wallet), the 1-yocto rule for function-call keys, allowance burn rate,
    and one real end-to-end settlement.
 3. Withdrawal flow (rate + funding treasury decisions).
-4. Redeploy of the merchant contract (new struct fields) — needs approval,
-   the Borsh check, and the `storage_balance_of` `{id}` → `{account_id}`
-   server change in the same release.
+4. Redeploy of the merchant contract (new struct fields) — needs approval
+   and the Borsh check. (The `storage_balance_of` `{id}` → `{account_id}`
+   server change is already done: the server sends `{account_id}`, matching
+   both the current source and deployed v2 — the `{id}` form was only for
+   deployed v1, now superseded.)
 
 ### Record-mint (2026-11-07, merged branch)
 

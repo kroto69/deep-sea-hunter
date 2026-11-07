@@ -2,7 +2,7 @@
 
 ## Verified Testnet activity
 
-RPC `https://rpc.testnet.near.org` returned chain ID `testnet`. Read-only finalized preflight and postflight checks; no deployment or initialization.
+RPC `https://rpc.testnet.near.org` returned chain ID `testnet`. This section is the v1 read-only pass: finalized preflight and postflight checks; no deployment or initialization in that pass. (The v2 deploy + initialization below was a separate, later step.)
 
 Successful merchant sale:
 - Transaction: `EA4yhL4izzZtQBG1WLLUEQnVbaSgwVBf2A8wp82zeu3L`
@@ -30,7 +30,7 @@ This verifies one actual Testnet storage deposit and one successful merchant sal
 
 ## Merchant v2 Testnet flow
 
-Contract `dsh-merchant-v2.deepfish-owner.testnet`. Final `view_code` at block `276598575`: NEAR code hash `8PjySGU8MWsvciY2DjKGwabi2tdhWYo51MkyDKyNZboz`, SHA-256 `6dd52d1115cf4134958854e679c2e685a0949de17f6421e29034e1e09f43703d`. That matches local `contracts/merchant/target/wasm32-unknown-unknown/release/deepfish_merchant_economy.wasm` byte for byte (cargo build, no `wasm-opt`).
+Contract `dsh-merchant-v2.deepfish-owner.testnet`. Final `view_code` at block `276598575`: NEAR code hash `8PjySGU8MWsvciY2DjKGwabi2tdhWYo51MkyDKyNZboz`, SHA-256 `6dd52d1115cf4134958854e679c2e685a0949de17f6421e29034e1e09f43703d`. That matched local `contracts/merchant/target/wasm32-unknown-unknown/release/deepfish_merchant_economy.wasm` byte for byte at deploy time (cargo build, no `wasm-opt`). The current local build differs — SHA-256 `86fbc4ad…` (rebuilt 2026-11-07, includes `mint_catch`) — so the match is historical, not current.
 
 | Step | Transaction | Result |
 |---|---|---|
@@ -56,7 +56,7 @@ Failed attempts, all rolled back with only gas charged:
 
 Warning: `storage_deposit` with key `id` instead of `account_id` credits the caller (`8nXFm2Ph…`, `231wDNoh…`, `HE6FE841…`). Those deposits added 0.3 NEAR to the contract account's own storage balance.
 
-V2 `order-1` is filled, so don't retry it. `withdraw_proceeds` is not tested yet.
+V2 `order-1` is filled, so don't retry it. `withdraw_proceeds`: no verified transaction hash is recorded yet (see the auto-mint section below) — do not cite a withdraw as tested until a hash exists.
 
 ## Server-side auto-mint and merchant agent
 
@@ -73,7 +73,7 @@ Signer-path proof (server code, not a UI session):
 
 - Mint `39MA8pybrJbs7RiPwe71SzZ7sbJVXzZGPt69Xn2dq9gb` FINAL, `mt_mint` event for `fish:catch-e2e-1794044371726`, `mt_balance_of` = 1.
 - Order `21DLCzejiTPJLju6Ccj1kEtufZ9rYa9wGdUAoGqFHJXt` FINAL, reserve 0.009 NEAR, `treasury_available` 0.99 → 0.981 NEAR.
-- Player sale and withdraw through the UI: `mt_balance_of` player 1 → 0, merchant desk 0 → 1, `merchant_inventory` = 1, order `active=false`, `reserved_orders` 0, `paid_out` 0.009 NEAR, `seller_claim` 0, `accounting_invariant` true.
+- Player sale and withdraw through the UI — UNVERIFIED, no transaction hash recorded: `mt_balance_of` player 1 → 0, merchant desk 0 → 1, `merchant_inventory` = 1, order `active=false`, `reserved_orders` 0, `paid_out` 0.009 NEAR, `seller_claim` 0, `accounting_invariant` true. These are reported state values only; per `docs/DEPLOYMENT.md` §7 a claim without a hash does not count. (The owner also reported on 2026-11-07 that "wd + sell" were tested on-chain on the newest branch — that report is likewise unverified: no tx hash, contract account, or code hash was supplied.)
 
 Rules the server enforces:
 
