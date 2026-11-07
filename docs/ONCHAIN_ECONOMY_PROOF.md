@@ -58,6 +58,33 @@ Warning: `storage_deposit` with key `id` instead of `account_id` credits the cal
 
 V2 `order-1` is filled, so don't retry it. `withdraw_proceeds` is not tested yet.
 
+## Server-side auto-mint and merchant agent
+
+Player flow needs no wallet popup to mint. The server signs `mint_asset` with the Testnet operator
+account, using the key at `~/.near-credentials/testnet/<NEAR_MERCHANT_OWNER_ID>.json`. No private key
+is stored in `.env`, this repo, or any migration.
+
+Prerequisites verified on Testnet:
+
+- `storage_deposit` for `flatrice4664.testnet`: `CGAxFr7CU74rhpyvNsfgJr6CRJV4533Ly6CDiymjKhnA`, total 0.1 NEAR.
+- RPC `https://test.rpc.fastnear.com` reports `chain_id=testnet`. `https://rpc.testnet.near.org` is deprecated and returns HTTP 429, which silently broke every chain view.
+
+Signer-path proof (server code, not a UI session):
+
+- Mint `39MA8pybrJbs7RiPwe71SzZ7sbJVXzZGPt69Xn2dq9gb` FINAL, `mt_mint` event for `fish:catch-e2e-1794044371726`, `mt_balance_of` = 1.
+- Order `21DLCzejiTPJLju6Ccj1kEtufZ9rYa9wGdUAoGqFHJXt` FINAL, reserve 0.009 NEAR, `treasury_available` 0.99 → 0.981 NEAR.
+- Player sale and withdraw through the UI: `mt_balance_of` player 1 → 0, merchant desk 0 → 1, `merchant_inventory` = 1, order `active=false`, `reserved_orders` 0, `paid_out` 0.009 NEAR, `seller_claim` 0, `accounting_invariant` true.
+
+Rules the server enforces:
+
+- Mint happens only after every off-chain hunt rule passed, and only after the DB transaction committed.
+- `asset_id` is `catch-<receipt uuid>`; the contract rejects a repeat, so a retried mint cannot double supply.
+- Mint is skipped, not failed, when the player has no bound wallet or no on-chain storage registration.
+- Orders are keyed per token (`order-fish:<asset>`), because `create_purchase_order` ties an order to one `token_id`. One order per token for life.
+- Price bridge is fixed at 1 CR = 0.0005 NEAR; the CR price itself stays dynamic (population, demand, stock, quality).
+- A catch that already has a token can no longer be sold for CR, so one fish cannot be paid twice.
+- When `treasury_available` cannot cover one unit, the agent reports `broke` and places no order.
+
 ## Verification after explicit authorization
 
 Before another paid call, first check whether earlier transaction is final or failed; do not retry while status is unknown. After standards audit and owner approval for any deploy/init/funding, independently verify on NEAR Testnet:

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { config } from '../config/env.js';
 import { requireActiveSession } from './sessions.js';
+import { mintReceipt } from './auto-mint.js';
 
 export class HuntError extends Error {
   constructor(code, statusCode = 400) { super(code); this.code = code; this.statusCode = statusCode; }
@@ -115,5 +116,9 @@ export async function submitShot(db, identity, huntId, body, idempotencyKey) {
     await client.query('UPDATE catch_sessions SET shots_used=shots_used+1,last_shot_at=$2 WHERE id=$1', [huntId, check.server_time]);
     await client.query('UPDATE player_equipment SET last_shot_at=$2 WHERE player_id=$1', [identity.id, check.server_time]);
     return { receipt: receipts[0], serverTime: check.server_time };
+  }).then(async result => {
+    // Phase 3: mint only after every off-chain rule passed, and after COMMIT so a slow chain call never holds row locks.
+    const mint = await mintReceipt(db, result.receipt).catch(error => ({ error: error.code || 'mint_failed' }));
+    return { ...result, mint };
   });
 }

@@ -8,7 +8,7 @@ export async function quote(db, identity, receiptId) {
     const { rows } = await c.query(`SELECT r.id,o.merchant_id,o.unit_price,o.price_version FROM catch_receipts r
       JOIN inventory_receipts i ON i.receipt_id=r.id JOIN merchant_orders o ON o.species_id=r.species_id
       JOIN merchant_accounts m ON m.id=o.merchant_id JOIN market_state ms ON ms.species_id=r.species_id
-      WHERE r.id=$1 AND r.player_id=$2 AND r.status='valid' AND r.expires_at>clock_timestamp() AND i.sold_at IS NULL
+      WHERE r.id=$1 AND r.player_id=$2 AND r.token_id IS NULL AND r.status='valid' AND r.expires_at>clock_timestamp() AND i.sold_at IS NULL
       AND m.enabled AND o.quantity>0 AND o.expires_at>clock_timestamp() AND o.price_version=ms.price_version ORDER BY o.merchant_id LIMIT 1`, [receiptId,identity.id]);
     if (!rows.length) fail('no_quote_available');
     const r = rows[0];
@@ -23,6 +23,8 @@ export async function sell(db, identity, quoteId, idempotencyKey) {
     if (!q) fail('quote_not_found',404);
     const m = (await c.query('SELECT * FROM merchant_accounts WHERE id=$1 FOR UPDATE', [q.merchant_id])).rows[0];
     const r = (await c.query('SELECT * FROM catch_receipts WHERE id=$1 AND player_id=$2 FOR UPDATE', [q.receipt_id,identity.id])).rows[0];
+    // Minted catch is sold on-chain only; selling it for CR too would pay twice for one fish.
+    if (r?.token_id) fail('catch_minted_onchain');
     const price = (await c.query('SELECT * FROM market_state WHERE species_id=$1 FOR UPDATE', [r.species_id])).rows[0];
     const order = (await c.query('SELECT *,expires_at>clock_timestamp() active FROM merchant_orders WHERE merchant_id=$1 AND species_id=$2 FOR UPDATE', [m.id,r.species_id])).rows[0];
     const species = (await c.query('SELECT * FROM species WHERE id=$1 FOR SHARE', [r.species_id])).rows[0];

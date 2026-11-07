@@ -1,6 +1,7 @@
 import { config } from '../config/env.js';
 import { challenge,bindWallet,view,reconcile,verifyMerchantTransaction } from '../services/near.js';
 import { fail } from '../services/transaction.js';
+import { chainState, signerAvailable } from '../services/merchant-agent.js';
 const text=(max=100)=>({type:'string',minLength:1,maxLength:max});
 const body=properties=>({type:'object',additionalProperties:false,required:Object.keys(properties),properties});
 const viewAt=(contractId,method,args)=>view(method,args,contractId);
@@ -9,14 +10,18 @@ export async function nearRoutes(app){
  app.get('/api/near/config',()=>({network:'testnet',contractId:config.nearContractId,enabled:!!config.nearContractId,settlement:config.nearContractId?'testnet_pending_verification':'not_configured',merchantContractId:config.merchantContractId,merchantEnabled:!!config.merchantContractId}));
  app.get('/api/merchant-chain/state/:accountId',{schema:{params:body({accountId:{type:'string',pattern:'^[a-z0-9][a-z0-9_.-]{0,62}[a-z0-9]$'}})}},async r=>{
    const id=config.merchantContractId,accountId=r.params.accountId;if(!id)fail('merchant_contract_not_configured',503);
-   const [merchant,tokens,balance,claim,storage,firstOrder]=await Promise.all([
+   const [merchant,tokens,balance,claim,storage,agent]=await Promise.all([
      viewAt(id,'merchant_id',{}),viewAt(id,'mt_tokens_for_owner',{account_id:accountId}),viewAt(id,'balance_of',{account_id:accountId}),
-     viewAt(id,'seller_claim',{account_id:accountId}),viewAt(id,'storage_balance_of',{id:accountId}),viewAt(id,'purchase_order',{order_id:'order-1'})
+     viewAt(id,'seller_claim',{account_id:accountId}),viewAt(id,'storage_balance_of',{account_id:accountId}),chainState(accountId).catch(()=>null)
    ]);
-   // Current Testnet merchant uses order-1; avoid serial RPC probes that stall UI sync.
-   const sellable=new Map(),o=firstOrder.value;
-   if(o?.active&&o.quantity>0&&o.expires_at>Date.now())sellable.set(o.token_id,{id:'order-1',unitPrice:BigInt(o.unit_price).toString(),expiresAt:o.expires_at});
+   // Agent keys orders by token: order-<token_id>. Legacy demo order stays as order-1.
+   const ids=(tokens.value||[]).map(t=>t.token_id);
+   const probes=await Promise.all(['order-1',...ids.map(t=>'order-'+t)].map(async o=>({o,v:(await viewAt(id,'purchase_order',{order_id:o}).catch(()=>null))?.value})));
+   const sellable=new Map();
+   for(const {o,v} of probes) if(v?.active&&v.quantity>0&&v.expires_at>Date.now()&&!sellable.has(v.token_id))sellable.set(v.token_id,{id:o,unitPrice:BigInt(v.unit_price).toString(),expiresAt:v.expires_at});
    return {network:'testnet',contractId:id,accountId,merchant:merchant.value,nativeBalance:balance.value,sellerClaim:claim.value,storage:storage.value,
+     agent,merchantBroke:!!agent&&BigInt(agent.availableTreasury)===0n,
+     autoMint:config.autoMint&&await signerAvailable(),
      tokens:(tokens.value||[]).map(t=>({tokenId:t.token_id,title:t.token_metadata?.title||t.token_id,order:sellable.get(t.token_id)||null}))};
  });
  app.get('/api/merchant-chain/config',()=>({network:'testnet',contractId:config.merchantContractId,enabled:!!config.merchantContractId,settlement:config.merchantContractId?'not_verified':'not_configured'}));

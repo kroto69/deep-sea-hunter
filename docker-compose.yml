@@ -32,7 +32,7 @@ services:
       CATCH_SESSION_TTL_SECONDS: ${CATCH_SESSION_TTL_SECONDS:-300}
       CATCH_MAX_SHOTS: ${CATCH_MAX_SHOTS:-30}
       NEAR_NETWORK: testnet
-      NEAR_RPC_URL: ${NEAR_RPC_URL:-https://rpc.testnet.near.org}
+      NEAR_RPC_URL: ${NEAR_RPC_URL:-https://test.rpc.fastnear.com}
       NEAR_CONTRACT_ID: ${NEAR_CONTRACT_ID:-}
     ports:
       - "127.0.0.1:3000:3000"

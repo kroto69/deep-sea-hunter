@@ -2,9 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { logisticGrowth, nextPrice } from '../domain/economy.js';
 import { transaction } from './transaction.js';
 import { config } from '../config/env.js';
+import { agentTick } from './merchant-agent.js';
+
+// Fixed unit bridge; the CR price itself stays dynamic (population, demand, stock). 1 CR = 0.0005 NEAR.
+export const crToYocto = (cr) => BigInt(Math.round(Number(cr))) * 5n * 10n ** 20n;
 
 export async function tick(db) {
-  return transaction(db, async c => {
+  const result = await transaction(db, async c => {
     if (!(await c.query('SELECT pg_try_advisory_xact_lock(1945837212) AS locked')).rows[0].locked) return { skipped: true };
     // Same order as selling: merchant, market; population tick never waits for player.
     const merchants = (await c.query('SELECT * FROM merchant_accounts ORDER BY id FOR UPDATE')).rows;
@@ -44,6 +48,21 @@ export async function tick(db) {
         await c.query(`INSERT INTO merchant_audit(merchant_id,action,detail) VALUES($1,'tick',$2)`, [m.id,{ speciesId:s.id,quantity,price:next.price,reason:next.reason,remainingBudget:budget }]);
       }
     }
-    return { grown, prices, orders };
+    // Phase 2/4: collect what the agent must mirror. All chain work happens after COMMIT so an RPC
+    // round-trip never holds these row locks.
+    const wanted = (await c.query(`SELECT o.species_id,i.receipt_id,r.player_id,p.wallet_account,o.unit_price
+      FROM merchant_orders o JOIN merchant_accounts m ON m.id=o.merchant_id AND m.enabled
+      JOIN inventory_receipts i ON i.species_id=o.species_id AND i.sold_at IS NULL
+      JOIN catch_receipts r ON r.id=i.receipt_id AND r.token_id IS NOT NULL
+      JOIN players p ON p.id=r.player_id AND p.wallet_account IS NOT NULL
+      WHERE o.quantity>0 AND o.expires_at>clock_timestamp()
+      ORDER BY o.species_id LIMIT 25`)).rows;
+    return { grown, prices, orders, wanted };
   });
+  if (result.skipped || !result.wanted?.length) return result;
+  const agent = await agentTick(result.wanted.map(w => ({
+    species_id: w.species_id, token_id: `fish:${w.receipt_id}`, playerId: w.wallet_account,
+    unitPrice: crToYocto(w.unit_price).toString()
+  }))).catch(error => ({ error: error.code || 'agent_failed' }));
+  return { ...result, wanted: undefined, agent };
 }

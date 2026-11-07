@@ -27,10 +27,14 @@ export const config = Object.freeze({
   catchMinShotIntervalMs: integer('CATCH_MIN_SHOT_INTERVAL_MS', 1000, 100, 60000),
   merchantInitialTreasury: integer('MERCHANT_INITIAL_TREASURY', 10_000, 1, 1_000_000_000),
   nearNetwork: process.env.NEAR_NETWORK || 'testnet',
-  nearRpcUrl: url('NEAR_RPC_URL', 'https://rpc.testnet.near.org', ['https:', 'http:']),
+  nearRpcUrl: url('NEAR_RPC_URL', 'https://test.rpc.fastnear.com', ['https:', 'http:']),
   nearContractId: process.env.NEAR_CONTRACT_ID || '',
-  merchantContractId: process.env.NEAR_MERCHANT_CONTRACT_ID || ''
+  merchantContractId: process.env.NEAR_MERCHANT_CONTRACT_ID || '',
+  merchantOwnerId: process.env.NEAR_MERCHANT_OWNER_ID || '',
+  // Key lives only in the operator's NEAR credentials file; this env var selects which Testnet account signs.
+  autoMint: process.env.AUTO_MINT_ENABLED === 'true'
 });
 if (config.nearContractId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.nearContractId)) throw new Error('NEAR_CONTRACT_ID must be a Testnet account');
 if (config.merchantContractId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.merchantContractId)) throw new Error('NEAR_MERCHANT_CONTRACT_ID must be a Testnet account');
+if (config.merchantOwnerId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.merchantOwnerId)) throw new Error('NEAR_MERCHANT_OWNER_ID must be a Testnet account');
 if (config.nearNetwork !== 'testnet') throw new Error('Only NEAR Testnet is permitted by this project configuration');
