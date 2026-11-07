@@ -12,6 +12,25 @@ rejects a merchant contract ID that is not a `.testnet` account
 (`server/src/config/env.js`). A Mainnet NEAR account is only needed for
 hackathon prize payout, not for running the game.
 
+## TL;DR for judges (30 seconds)
+
+1. Clone branch `feat/auto-mint-merchant-agent`.
+2. Build the contract (`contracts/merchant/build-wasm.sh`), deploy it with
+   `near-cli` under three accounts (owner / merchant desk / treasury), then
+   fund it with `fund_treasury`.
+3. Put two secrets in place: the owner key (`~/.near-credentials`, via
+   `near login`) and a fresh `SETTLEMENT_SIGNING_KEY` in `.env`.
+4. `npm ci`, Postgres up, `npm run migrate`, `npm run seed`, `npm start`.
+5. Render Blueprint from the repo, fill `ALLOWED_ORIGIN`, fix the two
+   hardcoded API URLs if Render renames the service.
+6. Verify: Guest catch → sell for CR → NEAR tab sell to FINAL → withdraw.
+
+Everything below is the same six steps with the exact commands, the
+gotchas, and the security rules. Honest limit: steps 2, 3, and 5 have not
+been executed end-to-end from this guide yet — they are grounded in the
+code, not in a live run — so expect small differences (e.g. `near-cli`
+flag names between versions) and report them back.
+
 ## 1. NEAR accounts to create (Testnet faucet)
 
 The contract `new()` takes three accounts and requires all three to be
