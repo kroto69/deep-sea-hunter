@@ -33,7 +33,7 @@ Flow diagram (same stages, visual): [`docs/flow-settlement-invisible.html`](docs
 | 6 Tick + Fast Forward | BUILT | 60 s market tick; Fast Forward simulates 7 days in 1 minute, local only. |
 | 7 Withdraw CR → NEAR | NOT BUILT | Rate exists in code (1 CR = 0.0005 NEAR, agent conversion); withdrawal flow + funding source undecided. |
 
-Background music: "Deep Ocean" by MeditationSpiritual (Pixabay, royalty-free), bundled as `audio/deep-ocean.mp3` (6:44, 256 kbps, ~12 MB), looped at 60% volume, starts on the first click; MUSIC ON/OFF button under WALLET. The static site serves it (`render.yaml` copies `audio/` to `dist/`).
+Background music: "Deep Ocean" by MeditationSpiritual (Pixabay, royalty-free), bundled as `audio/deep-ocean.mp3` (6:44, 128 kbps, ~6 MB — compressed from the 256 kbps / ~12 MB original), looped at 60% volume, starts on the first click; MUSIC ON/OFF button under WALLET. The static site serves it (`render.yaml` copies `audio/` to `dist/`).
 
 ## Run game and backend
 
