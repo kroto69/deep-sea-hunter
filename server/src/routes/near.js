@@ -1,7 +1,9 @@
 import { config } from '../config/env.js';
 import { challenge,bindWallet,view,reconcile,verifyMerchantTransaction } from '../services/near.js';
+import { receiptSignature, settlementPublicKey } from '../services/settlement.js';
 import { fail } from '../services/transaction.js';
 const text=(max=100)=>({type:'string',minLength:1,maxLength:max});
+const uuid={type:'string',format:'uuid'};
 const body=properties=>({type:'object',additionalProperties:false,required:Object.keys(properties),properties});
 const viewAt=(contractId,method,args)=>view(method,args,contractId);
 export async function nearRoutes(app){
@@ -20,6 +22,11 @@ export async function nearRoutes(app){
      tokens:(tokens.value||[]).map(t=>({tokenId:t.token_id,title:t.token_metadata?.title||t.token_id,order:sellable.get(t.token_id)||null}))};
  });
  app.get('/api/merchant-chain/config',()=>({network:'testnet',contractId:config.merchantContractId,enabled:!!config.merchantContractId,settlement:config.merchantContractId?'not_verified':'not_configured'}));
+ // Invisible settlement: the public key the owner publishes on the contract
+ // with set_settlement_key, and the per-receipt signature the catcher needs
+ // for mint_catch. The key itself never leaves the server.
+ app.get('/api/near/settlement-key',()=>{if(!config.settlementSigningKey)fail('settlement_not_configured',503);return {publicKey:settlementPublicKey(config.settlementSigningKey),contractId:config.merchantContractId};});
+ app.post('/api/near/receipt-signature',{...auth,schema:{body:body({receiptId:uuid})}},r=>receiptSignature(app.pg,r.player,r.body.receiptId));
  app.get('/api/merchant-chain/transactions/:hash',{schema:{params:body({hash:{type:'string',pattern:'^[1-9A-HJ-NP-Za-km-z]{43,44}$'}}),querystring:body({accountId:{type:'string',pattern:'^[a-z0-9][a-z0-9_.-]{0,62}[a-z0-9]$'}})}},async r=>{
    if(!config.merchantContractId)fail('merchant_contract_not_configured',503);
    return verifyMerchantTransaction(r.params.hash,r.query.accountId);

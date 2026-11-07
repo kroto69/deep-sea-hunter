@@ -2,6 +2,7 @@ import { Progression, ZONES } from './progression.js';
 import { FISH_SPECIES } from './fish.js';
 import { nextPrice, reopenAmountNeeded } from './economy-rules.js';
 import { testnetWallet, walletAccount, functionCallAction } from './wallet.js';
+import { hasSessionKey, ensureSessionKey, settleCatch } from './session-key.js';
 // ponytail: 0.009 NEAR covers measured seller storage plus callback reserve; re-measure before supporting larger token sets.
 const SELLER_STORAGE='9000000000000000000000';
 // Separate online session; never import local save balances or inventory.
@@ -34,6 +35,10 @@ export class OnlineGame {
     walletAccount().then(id=>{this.walletId=id;window.dispatchEvent(new Event('dsh-wallet-change'));}).catch(()=>{});
     if(!this.active){this.offlineData=this.progression.data;this.offlineSave=this.progression.save;this.progression.data=new Progression({offline:false}).data;this.progression.save=()=>{};this.active=true;this.hub.onRefill?.();}
     window.dispatchEvent(new Event('dsh-session-change'));
+    // Invisible settlement: retry any catch that could not mint on-chain
+    // last time (no key yet, offline, storage short). No popup when a valid
+    // key already exists; nothing happens at all without a granted key.
+    this.flushPendingSettlements().catch(() => {});
   }
   async newHunt(){this.hunt=await this.post('/api/hunts',{habitatId:'coral'});}
   // Hunts expire server-side (CATCH_SESSION_TTL_SECONDS); renew in background so shots keep landing.
@@ -60,12 +65,60 @@ export class OnlineGame {
   async flush(){
     if(this.flushing)return;this.flushing=true;
     try {while(this.pending.length){const event=this.pending[0];try {
-      await this.api(`/api/hunts/${event.huntId}/shots`,{method:'POST',body:{shotId:event.shotId,speciesId:event.speciesId},key:event.key});
+      const shot=await this.api(`/api/hunts/${event.huntId}/shots`,{method:'POST',body:{shotId:event.shotId,speciesId:event.speciesId},key:event.key});
+      if(shot?.receipt?.id)this.settleCatchInBackground(shot.receipt.id);
       this.pending.shift();this.savePending();this.hud.notify(`CAUGHT ${FISH_SPECIES.find(spec=>spec.id===event.speciesId)?.name||event.speciesId}`);
     }catch(error){if(['idempotency_replay','duplicate_shot'].includes(error.message)){this.pending.shift();this.savePending();continue;}
       if(['hunt_expired','shot_limit_reached','equipment_insufficient','population_depleted','species_unavailable','authentication_required'].includes(error.message)){this.pending.shift();this.savePending();this.hunt=null;}
       throw error;
     }}await this.refresh();}finally{this.flushing=false;}
+  }
+  // Invisible settlement (docs/SETTLEMENT_SESSION_KEYS.md): after a catch
+  // lands, mint its token on-chain with the session key — no wallet popup.
+  // Only runs for wallet-verified players who granted the key once. A
+  // receipt that cannot settle now (no key yet, offline, storage short)
+  // stays queued in localStorage and is retried on the next launch. The
+  // game never waits on settlement: the CR catch already happened.
+  settlementPendingKey(){return 'dsh.settlement.pending';}
+  settlementHistoryKey(){return 'dsh.settlement.history';}
+  pendingSettlements(){try{return JSON.parse(localStorage.getItem(this.settlementPendingKey())||'[]');}catch{return[];}}
+  settlementHistory(){try{return JSON.parse(localStorage.getItem(this.settlementHistoryKey())||'[]');}catch{return[];}}
+  queueSettlementReceipt(receiptId){const list=this.pendingSettlements();if(!list.some(p=>p.receiptId===receiptId))list.push({receiptId,queuedAt:Date.now()});try{localStorage.setItem(this.settlementPendingKey(),JSON.stringify(list));}catch{}}
+  dropPendingSettlement(receiptId){try{localStorage.setItem(this.settlementPendingKey(),JSON.stringify(this.pendingSettlements().filter(p=>p.receiptId!==receiptId)));}catch{}}
+  recordSettlement(entry){try{localStorage.setItem(this.settlementHistoryKey(),JSON.stringify([{...entry,at:Date.now()},...this.settlementHistory()].slice(0,50)));}catch{}}
+  async settleCatchInBackground(receiptId){
+    if(!hasSessionKey()){this.queueSettlementReceipt(receiptId);return;}
+    try{
+      const signed=await this.post('/api/near/receipt-signature',{receiptId});
+      const result=await settleCatch({contractId:signed.contractId,receipt:signed});
+      this.recordSettlement({receiptId,hash:result.hash,status:'settled'});
+      this.dropPendingSettlement(receiptId);
+    }catch{this.queueSettlementReceipt(receiptId);}
+  }
+  async flushPendingSettlements(){
+    if(!hasSessionKey())return;
+    for(const item of this.pendingSettlements()){
+      try{
+        const signed=await this.post('/api/near/receipt-signature',{receiptId:item.receiptId});
+        const result=await settleCatch({contractId:signed.contractId,receipt:signed});
+        this.recordSettlement({receiptId:item.receiptId,hash:result.hash,status:'settled'});
+        this.dropPendingSettlement(item.receiptId);
+      }catch(error){
+        // A receipt that can never settle (sold, expired, gone) leaves the
+        // queue so it cannot retry forever; anything else stays queued.
+        if(['receipt_unavailable','receipt_not_found'].includes(error.message))this.dropPendingSettlement(item.receiptId);
+      }
+    }
+    if(this.hub.open)this.render();
+  }
+  settlementLine(c, esc, button){
+    const pending=this.pendingSettlements().length,last=this.settlementHistory()[0],granted=hasSessionKey();
+    const status=!c.accountId?'Connect a wallet to enable invisible settlement.'
+      :!granted?'Invisible settlement off — approve once and catches mint on-chain by themselves.'
+      :pending?`${pending} catch${pending>1?'es':''} waiting to settle on-chain…`
+      :last?`Invisible settlement on — last catch settled on-chain${last.hash?` · ${last.hash.slice(0,10)}…`:''}.`
+      :'Invisible settlement on — your next catch mints on-chain by itself.';
+    return `<p class="hub-note">${esc(status)}</p>${c.accountId&&!granted?button('shop-settlement','ENABLE INVISIBLE SETTLEMENT'):''}`;
   }
   conservation(activity,name){
     if(!this.active||this.environment.zoneAt(this.camera.position.x,this.camera.position.z).id!=='coral')return;
@@ -118,6 +171,13 @@ export class OnlineGame {
       if(action==='shop-refresh'){this.hud.notify('SYNCING NEAR TESTNET…');await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);if(this.onchain.lastTx?.hash)await this.verifyMerchantTx(this.onchain.lastTx.hash);this.hud.notify('NEAR TESTNET SYNCED');}
       if(action==='shop-verify'){if(!this.onchain?.lastTx?.hash)throw new Error('No transaction to verify');await this.verifyMerchantTx(this.onchain.lastTx.hash);await this.shopLoad();}
       if(action==='shop-storage'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);const gap=BigInt(SELLER_STORAGE)-BigInt(this.onchain.storage?.total||0);if(gap<=0n)throw new Error('Storage deposit already sufficient');await this.shopCall('storage_deposit',{},gap.toString());}
+      if(action==='shop-settlement'){
+        const config=await this.api('/api/near/config');
+        if(!config.merchantEnabled||!config.merchantContractId)throw new Error('Testnet merchant contract not configured');
+        await ensureSessionKey({contractId:config.merchantContractId});
+        await this.flushPendingSettlements();
+        this.hud.notify('INVISIBLE SETTLEMENT ENABLED · CATCHES NOW MINT ON-CHAIN');
+      }
       if(action==='shop-mint')throw new Error('Mint disabled until online catch receipts can authorize minting.');
       if(action==='shop-sell'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);const t=this.onchain.tokens.find(x=>x.tokenId===id);if(!t?.order)throw new Error('No merchant order for this fish');await this.shopCall('accept_purchase_order',{order_id:t.order.id,amount:'1'});}
       if(action==='shop-withdraw'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);if(BigInt(this.onchain.sellerClaim||0)<=0n)throw new Error('No on-chain proceeds to withdraw');await this.shopCall('withdraw_proceeds',{});}
@@ -201,7 +261,7 @@ export class OnlineGame {
         html+=`<p class="hub-note">NEP-245 merchant flow pending Sandbox/runtime validation. Token sale requires wallet signature and gas; gameplay credits remain off-chain.</p>`;
         html+=`<div class="market-metrics"><div><small>FISH TOKENS</small><strong>${c.tokens.length}</strong></div><div><small>SALE PROCEEDS</small><strong>${near(c.sellerClaim)} <em>NEAR</em></strong></div><div><small>STORAGE DEPOSIT</small><strong>${near(c.storage?.total)} <em>NEAR</em></strong></div></div>`;
         html+=c.tokens.map(t=>`<div class="market-row"><div class="market-species"><b>${esc(t.title)}</b><small>${esc(t.tokenId)}</small></div><div class="market-price"><b>${t.order?`${near(t.order.unitPrice)} NEAR`:'—'}</b><small>${t.order?'merchant order':'no order'}</small></div>${t.order&&!lowStorage?button('shop-sell','SELL',t.tokenId):`<span class="order-state">${t.order?'NEED STORAGE':'WAITING'}</span>`}</div>`).join('')||'<p class="market-empty">No fish tokens on this account.</p>';
-        html+=`<div class="hub-quick">${button('shop-refresh','SYNC ON-CHAIN')}${lowStorage?button('shop-storage',`STORAGE DEPOSIT ${near(BigInt(SELLER_STORAGE)-BigInt(c.storage?.total||0))} NEAR`):''}${!lowStorage?'<p class="hub-note">Mint unlocks after receipt-backed on-chain flow is ready.</p>':''}${c.sellerClaim!=='0'?button('shop-withdraw','WITHDRAW NEAR'):''}</div>`;
+        html+=`<div class="hub-quick">${button('shop-refresh','SYNC ON-CHAIN')}${lowStorage?button('shop-storage',`STORAGE DEPOSIT ${near(BigInt(SELLER_STORAGE)-BigInt(c.storage?.total||0))} NEAR`):''}${this.settlementLine(c,esc,button)}${c.sellerClaim!=='0'?button('shop-withdraw','WITHDRAW NEAR'):''}</div>`;
       }
       if(tx)html+=`<p class="hub-note">LAST TX · ${esc(tx.method)} · ${tx.status==='final'?'FINAL':tx.status==='failed'?'FAILED FINAL':tx.status==='pending'?'PENDING FINALITY':tx.ok?'SUBMITTED · FINALITY UNVERIFIED':'WALLET REPORTED FAILURE'} · ${link(tx.hash)}</p>${tx.status!=='final'&&tx.status!=='failed'?button('shop-verify','VERIFY LAST TX'):''}`;
       if(c.contractId&&c.error)html+=`<p class="market-feedback is-error">${esc(c.error)}</p>`;

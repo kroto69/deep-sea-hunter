@@ -1,8 +1,9 @@
 # Settlement session keys — invisible on-chain settlement
 
-Status: DESIGN + FIRST SLICE IMPLEMENTED LOCALLY (2026-11-07). Not deployed,
-not verified on Testnet. No server receipt-signing endpoint yet, no wiring
-into the sell/buy flow, no withdrawal flow.
+Status: SLICES 1–2 IMPLEMENTED LOCALLY (2026-11-07). Not deployed, not
+verified on Testnet. Slice 2 added the server receipt-signing endpoint and
+the catch → mint wiring; the sell/buy transfer leg and the withdrawal flow
+are still missing.
 
 ## The requirement (owner, 2026-11-07)
 
@@ -149,17 +150,50 @@ Built and verified locally (2026-11-07):
   `callWithSessionKey`, `settleCatch`, and the localStorage outbox.
   `near-api-js@5.1.1` via esm.sh (verified 200 OK); API shapes checked
   against the installed package.
+- Slice 2 — server receipt-signing endpoint (`POST
+  /api/near/receipt-signature`, `GET /api/near/settlement-key`;
+  `server/src/services/settlement.js`): the server signs the caller's own
+  valid receipt with the seed from `SETTLEMENT_SIGNING_KEY` (generate with
+  `node server/scripts/generate-settlement-key.mjs`; the seed never enters
+  the repo). The signature is deterministic, so re-signing returns the same
+  value; the contract still enforces once-only minting. Unit tests
+  (`server/test/settlement.test.js`) pin the JS message format against the
+  recorded Rust test vector — it verifies under `node:crypto` — and the
+  integration test (`settlement.integration.test.js`, needs
+  `TEST_DATABASE_URL`) covers the endpoint's ownership, expiry, and
+  wallet-verification gates.
+- Slice 2 — catch → mint wiring (`js/online.js`): after a shot lands, the
+  receipt settles in the background with the session key; failures queue in
+  localStorage and retry on the next launch. The chain tab shows the
+  settlement status, an ENABLE INVISIBLE SETTLEMENT button (the one
+  approval), and the last settled hash. The game never waits on settlement.
+
+Honest limits of "the user never notices" (do not oversell this):
+
+- Two one-time visible steps remain before anything is invisible: the
+  session-key grant itself (one wallet approval) and a storage deposit
+  (the player must be registered + storage-funded on the merchant contract
+  before `mint_catch` can charge their balance entry; the chain tab already
+  shows the STORAGE DEPOSIT button when below `SELLER_STORAGE`). After
+  those two, catches mint with no popup.
+- Guests without a verified wallet cannot settle at all: there is no NEAR
+  account for `mint_catch` to pay the token to, so they keep playing
+  off-chain. The endpoint answers 401 for them.
+- The frontend wiring is written and syntax-checked, never run against a
+  wallet or Testnet. The server endpoint is unit- and integration-tested
+  locally; the full loop (grant → catch → mint → Explorer hash) is
+  unverified until a real wallet does it on Testnet.
 
 Remains (do not claim the loop is live):
 
-1. Server receipt-signing endpoint (signs `dsh-catch-v1` messages with the
-   server key; key itself in server env, never in the repo).
-2. Wiring settlement into the sell/buy flow (`js/online.js`) and the trade
-   history UI (show the settlement hash / pending state).
-3. Testnet verification: AddKey via Meteor/MyNearWallet/HERE (support varies
+1. Wiring the SELL/BUY transfer leg: after a CR sale commits, move the
+   token to the merchant (or the buyer, for shop sales) with `mt_transfer`
+   via the session key, and show the settlement hash / pending state in the
+   trade history UI. Slice 2 only mints at catch time.
+2. Testnet verification: AddKey via Meteor/MyNearWallet/HERE (support varies
    by wallet), the 1-yocto rule for function-call keys, allowance burn rate,
    and one real end-to-end settlement.
-4. Withdrawal flow (rate + funding treasury decisions).
-5. Redeploy of the merchant contract (new struct fields) — needs approval,
+3. Withdrawal flow (rate + funding treasury decisions).
+4. Redeploy of the merchant contract (new struct fields) — needs approval,
    the Borsh check, and the `storage_balance_of` `{id}` → `{account_id}`
    server change in the same release.

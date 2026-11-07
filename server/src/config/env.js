@@ -29,8 +29,13 @@ export const config = Object.freeze({
   nearNetwork: process.env.NEAR_NETWORK || 'testnet',
   nearRpcUrl: url('NEAR_RPC_URL', 'https://rpc.testnet.near.org', ['https:', 'http:']),
   nearContractId: process.env.NEAR_CONTRACT_ID || '',
-  merchantContractId: process.env.NEAR_MERCHANT_CONTRACT_ID || ''
+  merchantContractId: process.env.NEAR_MERCHANT_CONTRACT_ID || '',
+  // Invisible settlement: 64-hex ed25519 seed for the server receipt-signing
+  // key. Optional — the settlement endpoint answers 503 without it. Generate
+  // with `node server/scripts/generate-settlement-key.mjs`; never commit it.
+  settlementSigningKey: process.env.SETTLEMENT_SIGNING_KEY || ''
 });
 if (config.nearContractId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.nearContractId)) throw new Error('NEAR_CONTRACT_ID must be a Testnet account');
 if (config.merchantContractId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.merchantContractId)) throw new Error('NEAR_MERCHANT_CONTRACT_ID must be a Testnet account');
 if (config.nearNetwork !== 'testnet') throw new Error('Only NEAR Testnet is permitted by this project configuration');
+if (config.settlementSigningKey && !/^[0-9a-fA-F]{64}$/.test(config.settlementSigningKey)) throw new Error('SETTLEMENT_SIGNING_KEY must be a 64-hex-character ed25519 seed');

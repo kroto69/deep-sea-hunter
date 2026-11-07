@@ -15,8 +15,11 @@
 // Uses near-api-js@5.1.1 via esm.sh (same pattern as js/wallet.js) and the
 // existing @near-wallet-selector setup for the one-time grant.
 //
-// NOT yet wired into the sell/buy flow, and the server receipt-signing
-// endpoint does not exist yet — see docs/SETTLEMENT_SESSION_KEYS.md.
+// Wired into the catch flow (js/online.js settles each catch in the
+// background after the shot lands; the server signs receipts at
+// POST /api/near/receipt-signature). The sell/buy transfer leg — moving the
+// token to the merchant or another player with the session key after the CR
+// sale commits — is still missing; see docs/SETTLEMENT_SESSION_KEYS.md.
 
 import { KeyPair, keyStores, connect, transactions } from 'https://esm.sh/near-api-js@5.1.1';
 import { testnetWallet, walletAccount } from './wallet.js';
