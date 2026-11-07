@@ -281,7 +281,12 @@ impl StorageManagement for Contract {
 }
 #[near]
 impl Contract {
- // ponytail: registration bytes only; token-specific storage accounting remains a deployment blocker.
+ // Registration minimum = probe-measured baseline bytes (measured in new()).
+ // It covers one pending callback entry; every per-token balance/metadata
+ // write beyond that is charged to its owner by charge_storage_delta, and a
+ // write the owner cannot cover panics with "Insufficient storage balance"
+ // instead of minting an unfunded entry. Fund accounts above the minimum
+ // before minting or receiving (see contracts/merchant/README.md).
  fn storage_minimum(&self)->u128 { u128::from(self.storage_usage_baseline).checked_mul(env::storage_byte_cost().as_yoctonear()).expect("Storage minimum overflow") }
  // Deposit beyond the registration minimum and storage already charged to the account.
  fn storage_available(&self, id:&AccountId)->u128 { self.storage_balances.get(id).unwrap_or(0).saturating_sub(self.storage_minimum()).saturating_sub(self.mt_registered.get(id).unwrap_or(0)) }

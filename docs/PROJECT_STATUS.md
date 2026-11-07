@@ -14,7 +14,9 @@ Gameplay/Boat Hub: headless desktop/mobile browser regressions passed. Online ec
 - Disposable-schema integration suite verifies all 19 fish fixtures and transactional economy paths.
 - `tests/online-smoke.mjs`: desktop/mobile market settlement, treasury, Guest/offline isolation and Testnet config passed; five world/game browser suites passed.
 - Merchant Rust suite rerun with isolated `CARGO_TARGET_DIR`: 43 passed, 0 failed; not NEP-245 compliance evidence.
+- Merchant Rust suite 2026-11-07 (rustc 1.99.1, persistent toolchain `~/workspace/tools/cargo`): 52 passed, 0 failed — 6 new tests (mint `EVENT_JSON`, metadata missing-token shape, batch duplicate/>10/empty rejections, storage-funding rule). Not NEP-245 compliance evidence.
 - Fresh merchant WASM build passes with `-C link-arg=--allow-undefined`; SHA-256: `95def7894af73741aa87d1a1a0ceb14c75011b047382288a5882a2ae664be32d`.
+- Fresh merchant WASM rebuild 2026-11-07 (rustc 1.99.1, same logic, tests + one comment only): SHA-256 `f1a14f1c1299d806b17e1583cec5449b681f0d988d9eb6304aa2d92ae5816c56`. Sandbox economy + transfer-call suites NOT re-run here: local `neard` refuses to start (fd limit 65535 required, container hard limit 4096, unchangeable even as root). No deployment performed.
 - `contracts/merchant/sandbox.mjs` passes local mint/order/sale/withdraw and accounting checks. Sandbox is not Testnet or NEP-245 compliance evidence.
 
 ## NEP-245 blockers

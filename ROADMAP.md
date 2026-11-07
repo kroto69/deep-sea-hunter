@@ -8,7 +8,7 @@
 | Merchant bankruptcy + investment | IMPLEMENTED / TESTED (unit + Fast Forward; DB integration written, needs `TEST_DATABASE_URL`) | Close on sale/tick when available balance reaches reserve floor; reopen only via `POST /api/market/invest` with enough CR. Off-chain CR only; NEAR merchant unaffected. |
 | NEAR tab | PARTIAL / UNVERIFIED | Configured merchant state, storage, sell, and withdrawal UI calls exist; no RPC-final transaction evidence in this review. Mint disabled. |
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders; provider and delivery absent. |
-| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Local WASM build and Sandbox economy flow pass; runtime receiver/storage, event, metadata, resolver and batch conformance blockers remain. |
+| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite 52/52 (mint event, metadata missing-shape, batch limits, storage funding rule unit-tested); Sandbox suites previously passed, not re-run here (`neard` fd-limit blocked). Remaining: Testnet redeploy (needs approval + Borsh schema check + `storage_balance_of` arg fix), runtime receiver/storage/event confirmation, independent review. |
 | Existing NFT contract | DONE / TESTED (historical deployment) | Separate contract; unchanged. |
 
 ## Remaining verification

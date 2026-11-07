@@ -11,7 +11,7 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 | Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices and merchant demand. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
 | Merchant bankruptcy + investment | IMPLEMENTED / TESTED (unit + Fast Forward; DB integration written, needs `TEST_DATABASE_URL`) | Merchant closes when its available balance reaches its reserve floor (default 1000 CR) and reopens only when a player invests enough CR to lift it above the floor (`POST /api/market/invest`). Rule lives in `js/economy-rules.js`; closure is detected on sale and on market tick; Fast Forward simulates it. Off-chain CR only. |
 | NEAR merchant | ON-CHAIN SELL VERIFIED / COMPLIANCE INCOMPLETE | Testnet `accept_purchase_order` finalized; hash and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled; NEP-245 blockers remain. |
-| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite (46), Sandbox economy and adversarial receiver transfer-call checks pass locally; storage accounting and broader compliance review remain. Deployed WASM is older. Do not claim compliance. |
+| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Rust suite (52, was 46): mint event, metadata missing-token shape, batch limits and storage-funding rule now unit-tested. Sandbox economy and transfer-call suites previously passed but were not re-run in this sandbox (`neard` needs fd limit 65535, container hard limit is 4096). Deployed WASM is older; redeploy checklist in `contracts/merchant/README.md`. Do not claim compliance. |
 | Google/Email | NOT IMPLEMENTED | Disabled placeholders only. No identity provider or email delivery. Guest remains playable. |
 | Existing collectibles NFT | DONE / TESTED (historical deployment only) | Separate deployed NFT contract; does not prove merchant trades. Not modified here. |
 
@@ -88,12 +88,12 @@ NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes s
 The separate merchant prototype is **INCOMPLETE / UNVERIFIED** against official NEP-245. One `accept_purchase_order` flow is verified finalized on Testnet; this does not establish full NEP-245 compliance. Known blockers:
 
 - No real cross-contract receiver round-trip test; Sandbox tests cover only merchant settlement, not malicious receiver behavior.
-- No assertion of runtime `EVENT_JSON` logs.
-- Storage operations remain incompletely safe: available storage does not cover all per-token balance/metadata writes, and async refunds lack resolver.
-- Metadata JSON ABI and token view representation need verification against metadata extension.
+- `EVENT_JSON` logs: mint + transfer shapes are now unit-asserted locally; a runtime log assertion on Testnet is still missing.
+- Storage operations: per-write delta charging and the fund-above-minimum rule are unit-tested (minting to a minimum-funded player fails cleanly); async refunds still lack a resolver and interleaved-operation invariant proof is still missing.
+- Metadata JSON ABI: missing-token `None` array shape is unit-verified; exact on-chain view serialization still needs Testnet confirmation.
 - Resolver rollback/failure behavior has unit-only evidence, not runtime integration evidence.
-- Batch has a hard 10-token cap and rejects duplicate IDs; these restrictions need compatibility review. Arithmetic/storage edge cases need more tests.
-- Other storage registration semantics still need a standards pass.
+- Batch has a hard 10-token cap and rejects duplicate IDs and empty batches (all three rejections unit-tested); these documented MVP restrictions need compatibility review. Arithmetic/storage edge cases need more tests.
+- Other storage registration semantics still need a standards pass, plus a redeploy over live state needs a Borsh schema-compatibility check first (see `contracts/merchant/README.md` redeploy checklist).
 
 No compliance claim is made. Sandbox pass validates local mint/order/sale/withdraw flow only; it does not establish deployed-code match, receiver safety or NEP-245 compliance. No deployment or paid call without explicit approval.
 

@@ -43,6 +43,20 @@ const TID: &str = "fish:fish-000001";
 #[test] fn mt_metadata_contract_reports_spec(){assert_eq!(build().mt_metadata_contract().spec,"mt-1.0.0");}
 #[test] fn mt_metadata_views(){let c=setup();assert_eq!(c.mt_metadata_token_all(vec![TID.into()])[0].as_ref().unwrap().base.id,"fish");assert_eq!(c.mt_metadata_token_by_token_id(vec![TID.into()])[0].as_ref().unwrap().title.as_deref(),Some("Clownfish"));assert_eq!(c.mt_metadata_base_by_token_id(vec![TID.into()])[0].as_ref().unwrap().name,"fish");assert_eq!(c.mt_metadata_base_by_metadata_id(vec!["fish".into()])[0].as_ref().unwrap().id,"fish");assert!(c.mt_metadata_token_by_token_id(vec!["fish:nope".into()])[0].is_none());}
 #[test] fn mt_enumeration_lists_tokens(){let c=setup();assert_eq!(c.mt_tokens(None,None).len(),1);let owned=c.mt_tokens_for_owner(accounts(3),None,None);assert_eq!(owned[0].owner_id,Some(accounts(3)));assert_eq!(owned[0].base_metadata_id,"fish");assert!(c.mt_tokens_for_owner(accounts(4),None,None).is_empty());assert_eq!(c.mt_tokens_base_metadata_all(None,None)[0].id,"fish");}
+#[test] fn mt_metadata_views_report_missing_tokens_as_none(){
+  let c=setup();
+  assert!(c.mt_metadata_token_all(vec![TID.into(),"fish:missing-1".into()])[1].is_none());
+  assert!(c.mt_metadata_token_by_token_id(vec!["fish:missing-1".into()])[0].is_none());
+  assert!(c.mt_metadata_base_by_token_id(vec!["fish:missing-1".into()])[0].is_none());
+  assert_eq!(c.mt_batch_supply(vec![TID.into(),"fish:missing-1".into()]),vec![Some(U128(1)),None]);
+  // Multi-owner fungible token: mt_token carries no single owner by design;
+  // the owner-scoped view is mt_tokens_for_owner.
+  assert!(c.mt_token(vec![TID.into()])[0].as_ref().unwrap().owner_id.is_none());
+  assert_eq!(c.mt_tokens_for_owner(accounts(3),None,None)[0].owner_id,Some(accounts(3)));
+}
+#[test] #[should_panic(expected="Duplicate token IDs")] fn mt_batch_transfer_rejects_duplicate_token_ids(){let mut c=setup();ctx(accounts(3),1);c.mt_batch_transfer(accounts(4),vec![TID.into(),TID.into()],vec![U128(1),U128(1)],None,None);}
+#[test] #[should_panic(expected="Batch must contain 1 to 10 tokens")] fn mt_batch_transfer_rejects_over_ten_tokens(){let mut c=setup();ctx(accounts(3),1);let ids=(0..11).map(|i|format!("fish:batch-{i}")).collect::<Vec<_>>();c.mt_batch_transfer(accounts(4),ids,vec![U128(1);11],None,None);}
+#[test] #[should_panic(expected="Batch must contain 1 to 10 tokens")] fn mt_batch_transfer_rejects_empty_batch(){let mut c=setup();ctx(accounts(3),1);c.mt_batch_transfer(accounts(4),vec![],vec![],None,None);}
 
 // ---- storage management ----
 #[test] fn storage_bounds_and_registration(){let mut c=build();let bounds=c.storage_balance_bounds();assert!(bounds.min.as_yoctonear()>0);assert!(c.storage_balance_of(accounts(4)).is_none());ctx(accounts(4),bounds.min.as_yoctonear());let bal=c.storage_deposit(Some(accounts(4)),None);assert_eq!(bal.total,bounds.min);assert_eq!(bal.available,NearToken::from_yoctonear(0));assert!(c.storage_balance_of(accounts(4)).is_some());}
@@ -56,6 +70,19 @@ const TID: &str = "fish:fish-000001";
 
 // ---- events ----
 #[test] fn mt_events_follow_nep245_shape(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),TID.into(),U128(1),None,None);let logs=near_sdk::test_utils::get_logs();let event:serde_json::Value=serde_json::from_str(logs.last().unwrap().strip_prefix("EVENT_JSON:").unwrap()).unwrap();assert_eq!(event["standard"],"nep245");assert_eq!(event["event"],"mt_transfer");assert_eq!(event["data"][0]["token_ids"][0],TID);}
+#[test] fn mt_mint_emits_nep245_event(){
+  let mut c=build();
+  for a in [accounts(0),accounts(1),accounts(2),accounts(3),accounts(4)] {ctx(a,STORAGE); c.storage_deposit(None, None);}
+  ctx(accounts(0),500); c.fund_treasury();
+  ctx(accounts(0),1); c.mint_asset("fish-000001".into(),accounts(3),"clownfish".into(),"Clownfish".into());
+  let logs=near_sdk::test_utils::get_logs();
+  let raw=logs.iter().find(|l|l.contains("\"mt_mint\"")).expect("mt_mint event missing");
+  let event:serde_json::Value=serde_json::from_str(raw.strip_prefix("EVENT_JSON:").unwrap()).unwrap();
+  assert_eq!(event["standard"],"nep245");assert_eq!(event["version"],"1.0.0");assert_eq!(event["event"],"mt_mint");
+  assert_eq!(event["data"][0]["owner_id"],accounts(3).as_str());
+  assert_eq!(event["data"][0]["token_ids"][0],TID);
+  assert_eq!(event["data"][0]["amounts"][0],"1");
+}
 
 #[test] fn proceeds_withdrawal_failure_restores_claim(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(75),u64::MAX);ctx(accounts(3),1);c.accept_purchase_order("order-1".into(),U128(1));ctx(accounts(3),1);let _=c.withdraw_proceeds();let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5));testing_env!(b.build(),near_sdk::test_vm_config(),near_sdk::RuntimeFeesConfig::test(),std::collections::HashMap::new(),vec![PromiseResult::Failed]);assert!(!c.resolve_withdrawal(accounts(3),U128(75)));assert_eq!(c.seller_claim(accounts(3)).0,75);assert!(c.accounting_invariant());}
 
@@ -78,6 +105,14 @@ const TID: &str = "fish:fish-000001";
  assert_eq!(c.mt_supply(TID.into()),Some(U128(1)));
  assert_eq!(used(&c,accounts(3)),0,"player storage refunded");
  assert!(used(&c,accounts(1))>merchant_before,"merchant pays new entry");
+}
+// Minting to a player funded only with the registration minimum fails: every
+// per-token balance/metadata write is charged to its owner (see charge_storage_delta).
+#[test] #[should_panic(expected="Insufficient storage balance")] fn mint_requires_player_storage_funding(){
+  let mut c=build();
+  let min=c.storage_balance_bounds().min.as_yoctonear();
+  for a in [accounts(0),accounts(3)] {let deposit=if a==accounts(0){STORAGE}else{min}; ctx(a,deposit); c.storage_deposit(None, None);}
+  ctx(accounts(0),1); c.mint_asset("fish-000001".into(),accounts(3),"clownfish".into(),"Clownfish".into());
 }
 // Receiver with only the registration minimum cannot be given a new balance entry.
 #[test] #[should_panic(expected="Insufficient storage balance")] fn mt_transfer_rejects_receiver_without_storage(){

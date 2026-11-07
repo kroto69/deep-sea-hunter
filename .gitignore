@@ -2,6 +2,7 @@
 node_modules/
 contracts/collectibles/target/
 contracts/merchant/target/
+contracts/merchant/test-receiver/target/
 dist/
 build/
 coverage/
