@@ -6,8 +6,8 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 - Underwater gameplay, fish behavior, speargun, oxygen, progression, and tutorial are available.
 - Boat Hub includes Fish Market, Equipment, Missions, Dive Zones, and progression records.
-- One deterministic Dock Merchant posts orders based on stock, demand, prices, and treasury limits. The backend validates catch receipts and sales.
-- Fish sales reduce Merchant Treasury and increase Player Balance. Game Treasury is a separate ledger. These systems are off-chain.
+- Online demo supports catching all 19 fish in `js/fish.js`. Each fish has its own seeded base price and merchant demand. Depleted demand lowers price on a later market tick.
+- Dock Merchant validates catch receipts; selling raises merchant stock, reduces demand and merchant treasury, and raises Player Balance. All CR/accounting stays PostgreSQL off-chain.
 - Browser checks are documented for desktop `1280×720` and mobile landscape `844×390`. They do not prove real-phone FPS or performance.
 
 ## Identity and wallet
@@ -16,9 +16,9 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 **Guest Account** allows play without external identity. Offline Guest saves in the browser; Online Guest has a separate backend session/player. Guest does not yet have cloud sync.
 
-**Player Wallet** is an optional NEAR wallet, currently including Meteor Wallet. It manages a NEAR address and signs NFT transactions. It is not game login; Google/Email does not create a wallet, and disconnecting a wallet should not log a player out of a game account.
+**Player Wallet** is optional for NEAR actions. It manages a NEAR address and signs wallet transactions. It is not game login; Google/Email does not create a wallet. A wallet response alone does not verify transaction finality.
 
-**Contract Account** is the NEAR account where the NFT program runs (`deepfish-contract.testnet`). **Owner Account** (`deepfish-owner.testnet`) administers contract functions. Neither is a game balance.
+**Collectibles Contract Account** is the separate NFT account (`deepfish-contract.testnet`). **Merchant config** may point to `dsh-merchant-v1.deepfish-owner.testnet`; previous read-only audit recorded deployed state, but this pass did not re-query it. Neither is a game balance.
 
 **Merchant NPC** is an automated backend buyer. It has needs, inventory, orders, and internal treasury. It is not a NEAR account and makes no blockchain transactions.
 
@@ -26,11 +26,11 @@ Deep Sea Hunter is a first-person Three.js diving game. Players explore reefs, c
 
 ## NFTs and evidence limits
 
-Testnet contract deployment/initialization and read-only metadata have transaction/evidence details in `PROJECT_STATUS.md`. Contract source and collectible page provide NFT/marketplace operations; unit/sandbox tests do not prove player transactions on Testnet.
+Historical collectibles deployment details remain in `PROJECT_STATUS.md`; they do not verify merchant activity. Collectible page provides NFT/marketplace operations; unit/Sandbox tests do not prove player transactions on Testnet.
 
-There is currently no verified flow linking a unique capture to a one-time mint. Mint metadata is generic and does not prove species, rarity, or capture. Current backend rarity covers only common/uncommon/rare for selected economic species; the Common–Legendary capture-rarity system is still planned.
+There is currently no verified flow linking a unique capture to a one-time mint. One merchant sale finalized on Testnet (`accept_purchase_order`); this does not link a game catch to a token mint. Mint metadata does not prove species, rarity, or capture. Capture rarity progression remains future work.
 
-No Testnet mint, listing, buy, or transfer is claimed. Real wallet interaction requires owner approval.
+This review does not verify any Testnet mint, listing, buy, or transfer. Check finalized RPC/Explorer status before claiming a transaction. New deployment, initialization, or funding requires owner approval.
 
 ## Not yet available / future direction
 
@@ -40,6 +40,7 @@ No Testnet mint, listing, buy, or transfer is claimed. Real wallet interaction r
 - Capture identity, five-tier rarity, one-time NFT mint: require design and implementation.
 - Player-to-player marketplace: separate work from the current Merchant Market.
 - Deep Sea Hunter memecoin: future only, not MVP; no creation without owner approval.
+- Merchant NEP-245 compliance, catch-backed minting, and confirmed Testnet trade flow: unverified; see `../contracts/merchant/README.md`.
 
 ## Ledger flow
 

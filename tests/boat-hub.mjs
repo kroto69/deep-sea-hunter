@@ -18,10 +18,12 @@ try {
       progression.save = () => {};
       hub.show();
     });
-    for (const [tab, text] of [['market', 'FISH MARKET'], ['equipment', 'EQUIPMENT SHOP'], ['workshop', 'WORKSHOP'], ['zones', 'DIVE PREPARATION'], ['missions', 'Catch 5 fish'], ['records', 'No catch records yet'], ['storage', 'CLOWNFISH'], ['collectibles', 'OPEN COLLECTIBLES']]) {
+    for (const [tab, text] of [['market', 'FISH MARKET'], ['economy', 'No verified merchant contract'], ['equipment', 'EQUIPMENT SHOP'], ['workshop', 'WORKSHOP'], ['zones', 'DIVE PREPARATION'], ['missions', 'Catch 5 fish'], ['records', 'No catch records yet'], ['storage', 'CLOWNFISH'], ['collectibles', 'OPEN COLLECTIBLES']]) {
       await page.locator(`[data-tab="${tab}"]`).click();
       await page.locator('#hub-body').getByText(text, { exact: false }).first().waitFor();
     }
+    await page.locator('[data-tab="economy"]').click();
+    assert.match(await page.locator('#hub-body').textContent(), /DISABLED/);
     await page.locator('[data-tab="market"]').click();
     assert.match(await page.locator('#hub-body').textContent(), /SELL CATCH · 36 CR/);
     await page.locator('[data-action="sell"]').click();

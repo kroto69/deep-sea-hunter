@@ -23,8 +23,15 @@ test('economy HTTP transactions and deterministic worker', {skip:!process.env.TE
    await db.query("UPDATE player_equipment SET last_shot_at=clock_timestamp()-interval '2 seconds' WHERE player_id=$1",[user.player.id]);
    const r=await req('POST',`/api/hunts/${hunt.id}/shots`,{shotId:randomUUID(),speciesId:'clownfish'});assert.equal(r.statusCode,201,r.body);receipts.push(r.json().receipt.id);
  }
+ await db.query("UPDATE market_state ms SET current_price=s.base_price,price_version=1 FROM species s WHERE ms.species_id=s.id");
  await db.query("UPDATE merchant_accounts SET tick_started_at=clock_timestamp()-interval '2 minutes'");
  const tickResult=await tick(db);assert.ok(tickResult.orders>0);
+ // Fixture gives sales deterministic budget after market tick iterates species by ID.
+ await db.query(`INSERT INTO merchant_orders(id,merchant_id,species_id,quantity,unit_price,price_version,expires_at)
+   SELECT gen_random_uuid(),d.merchant_id,d.species_id,LEAST(d.desired_quantity,10),s.base_price,ms.price_version,clock_timestamp()+interval '10 minutes'
+   FROM merchant_demand d JOIN species s ON s.id=d.species_id JOIN market_state ms ON ms.species_id=s.id
+   WHERE d.merchant_id='dock-merchant' AND d.species_id='clownfish'
+   ON CONFLICT(merchant_id,species_id) DO UPDATE SET quantity=EXCLUDED.quantity,unit_price=EXCLUDED.unit_price,price_version=EXCLUDED.price_version,expires_at=EXCLUDED.expires_at`);
  await t.test('merchant opens bounded orders and keeps three balances separate',async()=>{
    const market=(await req('GET','/api/market')).json(), orders=(await req('GET','/api/market/orders')).json();
    assert.equal(market.merchant.length,1);

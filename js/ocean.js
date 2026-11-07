@@ -6,8 +6,8 @@ export function createOcean({ scene, sun, environment, baseFog = 0.026 }) {
   const state = {
     current: new THREE.Vector2(0.5, 0.2),
     strength: 1,
-    surfaceColor: new THREE.Color(0x2394b8),
-    deepColor: new THREE.Color(0x0d3247)
+    surfaceColor: new THREE.Color(0x1fb0d8),
+    deepColor: new THREE.Color(0x0e4466)
   };
   const baseSun = new THREE.Vector3(20, 60, 10);
   const temp = new THREE.Color();

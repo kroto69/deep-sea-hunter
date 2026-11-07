@@ -25,9 +25,9 @@ export function verifyMessage(payload, publicKey, signature) {
 }
 export async function rpc(method,params) {
   try {
-    const statusResponse=await fetch(config.nearRpcUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:randomUUID(),method:'status',params:[]}),signal:AbortSignal.timeout(8000)});
+    const statusResponse=await fetch(config.nearRpcUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:randomUUID(),method:'status',params:[]}),signal:AbortSignal.timeout(20000)});
     const status=await statusResponse.json();if(status.result?.chain_id!=='testnet')fail('wrong_chain',503);
-    const response=await fetch(config.nearRpcUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:randomUUID(),method,params}),signal:AbortSignal.timeout(12000)});
+    const response=await fetch(config.nearRpcUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:randomUUID(),method,params}),signal:AbortSignal.timeout(20000)});
     const json=await response.json();if(!response.ok||json.error)fail('near_rpc_unavailable',503);return json.result;
   } catch(e) {if(e.statusCode)throw e;fail('near_rpc_unavailable',503);}
 }
@@ -55,9 +55,9 @@ export async function bindWallet(db,identity,body,query=rpc){
     return {accountId:body.accountId,network:'testnet',verified:true};
   });
 }
-export async function view(method,args){
-  if(!config.nearContractId)fail('contract_not_configured',503);
-  const result=await rpc('query',{request_type:'call_function',finality:'final',account_id:config.nearContractId,method_name:method,args_base64:Buffer.from(JSON.stringify(args)).toString('base64')});
+export async function view(method,args,contractId=config.nearContractId){
+  if(!contractId)fail('contract_not_configured',503);
+  const result=await rpc('query',{request_type:'call_function',finality:'final',account_id:contractId,method_name:method,args_base64:Buffer.from(JSON.stringify(args)).toString('base64')});
   return {blockHash:result.block_hash,blockHeight:result.block_height,value:JSON.parse(Buffer.from(result.result).toString())};
 }
 export async function reconcile(db,row,query=rpc){
@@ -84,6 +84,20 @@ export async function reconcile(db,row,query=rpc){
     });
     return {status:successful?'final':'failed'};
   }catch(e){const error=e.code||'rpc_timeout';const terminal=error==='transaction_mismatch';await db.query("UPDATE chain_transactions SET checked_at=clock_timestamp(),last_error=$2,status=$3 WHERE hash=$1 AND status='pending'",[row.hash,error,terminal?'failed':'pending']);return {status:terminal?'failed':'pending',error};}
+}
+export async function verifyMerchantTransaction(hash,signer,query=rpc){
+  const result=await query('EXPERIMENTAL_tx_status',{tx_hash:hash,sender_account_id:signer,wait_until:'FINAL'});
+  const tx=result.transaction;
+  if(!tx||tx.hash!==hash||tx.signer_id!==signer||tx.receiver_id!==config.merchantContractId)fail('transaction_mismatch',400);
+  const action=tx.actions?.length===1?tx.actions[0].FunctionCall:null;
+  const allowed=['storage_deposit','accept_purchase_order','withdraw_proceeds'];
+  if(!action||!allowed.includes(action.method_name))fail('transaction_method_not_supported',400);
+  if(result.final_execution_status!=='FINAL')return {hash,status:'pending',method:action.method_name};
+  const contractReceipts=(result.receipts_outcome||[]).filter(r=>r.outcome.executor_id===config.merchantContractId);
+  const success=Object.hasOwn(result.status||{},'SuccessValue')&&contractReceipts.length>0&&
+    contractReceipts.every(r=>Object.hasOwn(r.outcome.status||{},'SuccessValue'));
+  const events=(result.receipts_outcome||[]).filter(r=>r.outcome.executor_id===config.merchantContractId&&Object.hasOwn(r.outcome.status||{},'SuccessValue')).flatMap(r=>(r.outcome.logs||[]).filter(log=>log.startsWith('EVENT_JSON:')).map(log=>{try{return JSON.parse(log.slice(11));}catch{return null;}})).filter(Boolean);
+  return success?{hash,status:'final',method:action.method_name,events}:{hash,status:'failed',method:action.method_name,events,error:result.status?.Failure||'receipt_failed'};
 }
 export async function reconcilePending(db){
   if(!config.nearContractId)return;

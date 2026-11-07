@@ -1,58 +1,28 @@
 # Deep Sea Hunter
 
-Deep Sea Hunter is a first-person low-poly underwater hunting game. Explore reefs, catch fish, manage oxygen and equipment, and return to Boat Hub.
+Low-poly underwater hunting game built with Three.js. Explore, catch fish, manage oxygen/equipment, and return to Boat Hub.
 
-![Underwater world](tests/environment-preview.png)
+## Submission status at a glance
 
-## Features
+| Area | Status | What this means |
+|---|---|---|
+| Gameplay and existing Hub tabs | DONE / TESTED | Existing Three.js gameplay, controls, progression and Guest save remain. Automated coverage is headless only. |
+| Fast Forward | SIMULATED / TESTED | Seven local simulated days; does not mutate save, backend or chain. |
+| Online demo economy | IMPLEMENTED / TESTED | All 19 fish can be caught online; distinct per-fish base prices and merchant demand. Isolated PostgreSQL integration tests pass; CR settlement stays off-chain. |
+| NEAR merchant | ON-CHAIN SELL VERIFIED / COMPLIANCE INCOMPLETE | Testnet `accept_purchase_order` finalized; hash and state evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint disabled; NEP-245 blockers remain. |
+| Merchant NEP-245 | INCOMPLETE / UNVERIFIED | Fresh local WASM build and Sandbox economy flow pass; receiver/storage/compliance blockers remain. Do not claim compliance. |
+| Google/Email | NOT IMPLEMENTED | Disabled placeholders only. No identity provider or email delivery. Guest remains playable. |
+| Existing collectibles NFT | DONE / TESTED (historical deployment only) | Separate deployed NFT contract; does not prove merchant trades. Not modified here. |
 
-- Three.js browser gameplay with fish AI, speargun, oxygen, equipment, missions, zones, and progression.
-- Offline Guest play with local `dsh.save.v2` persistence.
-- Online Guest sessions with a Fastify/PostgreSQL economy.
-- Boat Hub, Fish Market, deterministic Dock Merchant orders, and separate offline/online balances.
-- Optional NEAR Testnet collectible page and wallet integration.
+Verified Testnet sell finalized for one existing demo token. This proves one merchant transaction, not full NEP-245 compliance or production readiness. Local simulations and PostgreSQL balances remain off-chain.
 
-Ordinary fish, game credits, and Merchant settlement remain off-chain. Meteor Wallet is optional and separate from game authentication. Google/Email account authentication and cross-device cloud saves are planned, not implemented.
+## Run game and backend
 
-## Technology
-
-Three.js ES modules, vanilla browser APIs, Node.js, Fastify, PostgreSQL, Docker Compose, Rust, NEAR SDK, and optional Playwright browser tests.
-
-## Project structure
-
-```text
-index.html, style.css     Browser game and UI
-js/                       Game, UI, online, and wallet modules
-server/src/               Fastify API and economy services
-server/migrations/        Additive PostgreSQL migrations
-server/test/              Backend tests
-tests/                    Browser tests and visual fixtures
-contracts/collectibles/   NEAR contract source, tests, sandbox, pinned WASM
-docs/                     Architecture, API, and project status
-```
-
-## Requirements
-
-- Node.js and npm
-- Docker Compose
-- Python 3 for the static frontend server
-- Rust toolchain only when rebuilding the contract
-- Chromium and Playwright only for browser tests
-
-## Install and configure
+Requirements: Node.js/npm, Docker Compose, Python 3. Set local-only values in `.env` using `.env.example`; never expose secrets. Preserve existing PostgreSQL volumes.
 
 ```bash
 npm ci
 cp .env.example .env
-```
-
-Set a local PostgreSQL password in `.env`, and use the same password in `POSTGRES_PASSWORD`, `DATABASE_URL`, and `TEST_DATABASE_URL`. `.env.example` contains placeholders only. Never commit `.env`, wallet credentials, session tokens, or production secrets.
-
-## Run locally
-
-Start PostgreSQL and initialize the existing development database. Migrations are additive; do not reset a database volume containing user data.
-
-```bash
 docker compose up -d postgres
 npm run migrate
 npm run seed
@@ -60,60 +30,68 @@ docker compose up -d --build api
 python3 -m http.server 8080 --bind localhost
 ```
 
-Open `http://localhost:8080`. API endpoints: `http://127.0.0.1:3000/health` and `/ready`.
+Open `http://localhost:8080`. API readiness: `http://127.0.0.1:3000/ready`. Guest play does not require wallet, seed phrase, wallet popup, or gas prompt.
 
-For an existing database, use its existing password. Keep API and frontend bound to loopback during local development. Browser ES modules require HTTP; `file://` is unsupported.
+## Run tests
 
-## Tests
-
-Backend tests use randomized isolated PostgreSQL schemas when database integration tests are enabled:
+Backend unit tests:
 
 ```bash
 npm test
 ```
 
-With the API and frontend running, browser tests use local Playwright and Chromium paths:
+Database integration tests run when `TEST_DATABASE_URL` points to a disposable test DB/schema:
 
 ```bash
-TEST_DATABASE_URL=postgres://deepfish:<local-password>@127.0.0.1:5432/deepfish \
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
-CHROMIUM_PATH=/absolute/path/to/chrome-headless-shell \
-node tests/online-smoke.mjs
-
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
-CHROMIUM_PATH=/absolute/path/to/chrome-headless-shell \
-node tests/boat-hub.mjs
-
-PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
-CHROMIUM_PATH=/absolute/path/to/chrome-headless-shell \
-node tests/welcome-tutorial.mjs
+TEST_DATABASE_URL=postgres://deepfish:<local-password>@127.0.0.1:5432/deepfish npm test
 ```
 
-`tests/wallet-login.mjs` uses a Wallet Selector mock for UI regression. It does not connect a real wallet or sign a transaction. Browser smoke covers desktop and mobile landscape viewports; real-device FPS, memory, and thermal behavior remain unverified.
-
-## NEAR Testnet status
-
-The pinned contract artifact is `contracts/collectibles/artifacts/deepfish_collectibles.mvp.wasm`.
+Merchant contract local tests and WASM build (Rust toolchain plus `wasm32-unknown-unknown`):
 
 ```bash
-sha256sum contracts/collectibles/artifacts/deepfish_collectibles.mvp.wasm
-node contracts/collectibles/sandbox.mjs
+PATH=/tmp/dsh-cargo/bin:$PATH RUSTUP_HOME=/tmp/dsh-rustup CARGO_HOME=/tmp/dsh-cargo RUSTUP_TOOLCHAIN=stable cargo test --manifest-path contracts/merchant/Cargo.toml --lib -- --test-threads=1
+PATH=/tmp/dsh-cargo/bin:$PATH RUSTUP_HOME=/tmp/dsh-rustup CARGO_HOME=/tmp/dsh-cargo RUSTUP_TOOLCHAIN=stable contracts/merchant/build-wasm.sh
+PATH=/tmp/dsh-cargo/bin:$PATH RUSTUP_HOME=/tmp/dsh-rustup CARGO_HOME=/tmp/dsh-cargo RUSTUP_TOOLCHAIN=stable node contracts/merchant/sandbox.mjs
 ```
 
-Expected SHA-256:
+Inspect source and audit notes: `contracts/merchant/src/lib.rs`, `contracts/merchant/src/tests.rs`, `contracts/merchant/README.md`. Local tests/build are not standards compliance or deployment evidence.
 
-```text
-afb2bf590cc5b0d410e055386c9d714751f74f45b75dd3f53445477a8a63b3ae
+## Browser regression tests
+
+Start game/API as above, then set installed Playwright and Chromium paths:
+
+```bash
+PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs CHROMIUM_PATH=/absolute/path/to/chrome-headless-shell node tests/welcome-tutorial.mjs
+TEST_DATABASE_URL=postgres://deepfish:<local-password>@127.0.0.1:5432/deepfish PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs CHROMIUM_PATH=/absolute/path/to/chrome-headless-shell node tests/online-smoke.mjs
+node tests/fast-forward.test.mjs
 ```
 
-The contract is deployed and initialized on NEAR Testnet as `deepfish-contract.testnet`. Its configured owner is `deepfish-owner.testnet`. Deployment and initialization are documented in `docs/PROJECT_STATUS.md`.
+`tests/boat-hub.mjs` is stale against current Hub tabs and currently fails waiting for `[data-tab="economy"]`; do not count it as passing coverage. `tests/wallet-login.mjs` uses mock wallet behavior; it does not prove a real login or signature. Browser sizes include desktop and 844×390 mobile landscape. Physical-device performance is UNVERIFIED.
 
-Real wallet connection, NFT minting, listing, buying, transfer, and signing are not claimed as end-to-end verified. Do not deploy, transact, or use private keys without explicit authorization. Contract `target/` output is ignored and can be rebuilt locally.
+## Demo economy and NEAR tab
 
-## Documentation
+Online Guest can catch all 19 fish shown by `js/fish.js`. Each seeded fish has its own base price and merchant demand. Catching reduces server population; selling raises merchant stock and reduces demand, so the next market tick can lower price when demand is exhausted. Merchant CR, inventory, and receipts live in PostgreSQL off-chain. Seed changes apply only after `npm run seed`; existing population rows remain unchanged.
 
-- [`ROADMAP.md`](ROADMAP.md): planned work and feature status.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): system boundaries and data flows.
-- [`docs/api-sessions-hunts.md`](docs/api-sessions-hunts.md): backend session and hunting API.
-- [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md): current evidence and known limits.
-- [`docs/HACKATHON_OVERVIEW.md`](docs/HACKATHON_OVERVIEW.md): concise project overview.
+Fast Forward is a deterministic local demo of seven days of demand, stock, and treasury. It displays before/after and does not persist or call backend/chain.
+
+NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes storage deposit, sell, and withdrawal calls. `.env.example` configures `NEAR_CONTRACT_ID` for collectibles, not merchant; set merchant ID separately to enable merchant state/actions. Mint stays disabled until receipt-backed authorization is safe. After a wallet returns a hash, UI verifies signer, receiver, merchant method, final execution status, and merchant receipt against Testnet RPC. UI shows FINAL only after successful final receipt verification; state still needs SYNC ON-CHAIN. Pending finality stays labeled pending. Verify resulting state before claiming economic settlement. Verified Testnet sale evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`; merchant prototype is not confirmed NEP-245 compliant. Google/Email controls are disabled; authentication is NOT IMPLEMENTED.
+
+## NEP-245 audit status
+
+The separate merchant prototype is **INCOMPLETE / UNVERIFIED** against official NEP-245. One `accept_purchase_order` flow is verified finalized on Testnet; this does not establish full NEP-245 compliance. Known blockers:
+
+- No real cross-contract receiver round-trip test; Sandbox tests cover only merchant settlement, not malicious receiver behavior.
+- No assertion of runtime `EVENT_JSON` logs.
+- Storage operations remain incompletely safe: available storage does not cover all per-token balance/metadata writes, and async refunds lack resolver.
+- Metadata JSON ABI and token view representation need verification against metadata extension.
+- Resolver rollback/failure behavior has unit-only evidence, not runtime integration evidence.
+- Batch has a hard 10-token cap and rejects duplicate IDs; these restrictions need compatibility review. Arithmetic/storage edge cases need more tests.
+- Other storage registration semantics still need a standards pass.
+
+No compliance claim is made. Sandbox pass validates local mint/order/sale/withdraw flow only; it does not establish deployed-code match, receiver safety or NEP-245 compliance. No deployment or paid call without explicit approval.
+
+## Verifying on-chain activity
+
+RPC verified finalized Testnet sell `EA4yhL4izzZtQBG1WLLUEQnVbaSgwVBf2A8wp82zeu3L`: signer `dsh-player-v1.deepfish-owner.testnet`, receiver `dsh-merchant-v1.deepfish-owner.testnet`, method `accept_purchase_order`, order `order-1`, one token. Receipt succeeded, emitted `nep245 mt_transfer`, and state shows seller balance 0, merchant balance 1, seller claim 0.01 NEAR, order filled, accounting invariant true. Explorer: https://explorer.testnet.near.org/transactions/EA4yhL4izzZtQBG1WLLUEQnVbaSgwVBf2A8wp82zeu3L. Separate storage top-up and failed attempt also occurred; details and hashes in `docs/ONCHAIN_ECONOMY_PROOF.md`. UI checks transaction finality and successful merchant receipts, then state still requires `SYNC ON-CHAIN`. Before claiming economic settlement, verify finalized hash, signer/method/arguments, receipts, and before/after contract balance, claim, and token views on Testnet. Do not retry a paid transaction while status is unknown. Deployment, funding, or reinitialization requires explicit approval.
+
+Main documentation: [`ROADMAP.md`](ROADMAP.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md), [`docs/ONCHAIN_ECONOMY_PROOF.md`](docs/ONCHAIN_ECONOMY_PROOF.md).

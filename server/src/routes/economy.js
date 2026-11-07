@@ -18,7 +18,8 @@ export async function economyRoutes(app) {
   app.get('/api/market',auth,async()=>({settlement:'simulated_offchain',prices:(await app.pg.query('SELECT m.*,s.name FROM market_state m JOIN species s ON s.id=m.species_id ORDER BY species_id')).rows,merchant:(await app.pg.query('SELECT id,enabled,total_treasury,available_balance,reserved_balance,reserve_floor,max_order,max_tick,tick_spent FROM merchant_accounts ORDER BY id')).rows}));
   app.get('/api/market/quotes',{...auth,schema:{querystring:body({receiptId:uuid})}},r=>quote(app.pg,r.player,r.query.receiptId));
   post('/api/market/sell',{quoteId:uuid},r=>sell(app.pg,r.player,r.body.quoteId,key(r)));
-  app.get('/api/market/orders',auth,async()=>(await app.pg.query(`SELECT d.species_id,s.name,d.desired_quantity,i.quantity AS stock,
+  app.get('/api/market/orders',auth,async()=>(await app.pg.query(`SELECT d.species_id,s.name,s.base_price,p.population_count,p.capacity,d.desired_quantity,i.quantity AS stock,
+    (SELECT a.detail->>'reason' FROM merchant_audit a WHERE a.merchant_id=m.id AND a.action='tick' AND a.detail->>'speciesId'=s.id ORDER BY a.created_at DESC LIMIT 1) AS price_reason,
     GREATEST(0,d.desired_quantity-i.quantity) AS needed,o.id AS order_id,
     CASE WHEN m.enabled AND o.quantity>0 AND o.expires_at>clock_timestamp() THEN o.quantity ELSE 0 END AS quantity,
     CASE WHEN m.enabled AND o.quantity>0 AND o.expires_at>clock_timestamp() THEN o.unit_price ELSE NULL END AS unit_price,
@@ -26,7 +27,7 @@ export async function economyRoutes(app) {
       WHEN o.quantity>0 AND o.expires_at>clock_timestamp() THEN 'open' ELSE 'waiting' END AS status
     FROM merchant_demand d JOIN merchant_accounts m ON m.id=d.merchant_id
     JOIN merchant_inventory i ON i.merchant_id=d.merchant_id AND i.species_id=d.species_id
-    JOIN species s ON s.id=d.species_id LEFT JOIN merchant_orders o ON o.merchant_id=d.merchant_id AND o.species_id=d.species_id
+    JOIN species s ON s.id=d.species_id JOIN populations p ON p.species_id=s.id AND p.habitat_id=s.habitat_id LEFT JOIN merchant_orders o ON o.merchant_id=d.merchant_id AND o.species_id=d.species_id
     WHERE s.economic_enabled AND NOT s.protected ORDER BY d.species_id`)).rows);
   app.get('/api/market/transactions',auth,async r=>(await app.pg.query('SELECT * FROM economy_transactions WHERE player_id=$1 ORDER BY created_at DESC LIMIT 100',[id(r)])).rows);
   app.get('/api/market/purchases',auth,async()=>(await app.pg.query(`SELECT t.species_id,s.name,t.unit_price,t.created_at FROM market_transactions t

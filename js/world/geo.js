@@ -23,7 +23,8 @@ export function mergeParts(parts) {
       if (srcCol) colors.push(srcCol.getX(i), srcCol.getY(i), srcCol.getZ(i));
       else {
         const facet = 0.72 + Math.max(0, tmp.normalize().y) * 0.28;
-        col.copy(baseColor).multiplyScalar(facet);
+        // Warm, contrast-preserving facet shading (not a darkening multiply).
+        col.copy(baseColor).multiplyScalar(facet).lerp(baseColor, 0.55);
         colors.push(col.r, col.g, col.b);
       }
     }

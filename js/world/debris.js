@@ -5,23 +5,23 @@ import { part, mergeParts, propMaterial } from './geo.js';
 const DEBRIS_BUILDERS = {
   bottle(rand) {
     return mergeParts([
-      part(new THREE.CylinderGeometry(0.09, 0.09, 0.42, 6), 0x8fd8e0, [0, 0.21, 0]),
-      part(new THREE.CylinderGeometry(0.09, 0.05, 0.14, 6), 0x8fd8e0, [0, 0.47, 0]),
-      part(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 6), 0x2a6a7a, [0, 0.58, 0])
+      part(new THREE.CylinderGeometry(0.09, 0.09, 0.42, 6), 0x38e0f0, [0, 0.21, 0]),
+      part(new THREE.CylinderGeometry(0.09, 0.05, 0.14, 6), 0x38e0f0, [0, 0.47, 0]),
+      part(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 6), 0x0f4a6a, [0, 0.58, 0])
     ]);
   },
   bag(rand) {
     const g = new THREE.IcosahedronGeometry(0.32, 0);
     g.scale(1, 1.35, 0.35);
     return mergeParts([
-      part(g, 0xe8eef0, [0, 0.32, 0], [0.2, rand() * 3, 0.1]),
-      part(new THREE.ConeGeometry(0.14, 0.2, 4), 0xd8dee2, [0, 0.66, 0], [0.2, 0, 0])
+      part(g, 0x9ff5ff, [0, 0.32, 0], [0.2, rand() * 3, 0.1]),
+      part(new THREE.ConeGeometry(0.14, 0.2, 4), 0x6ee6ff, [0, 0.66, 0], [0.2, 0, 0])
     ]);
   },
   can(rand) {
     return mergeParts([
-      part(new THREE.CylinderGeometry(0.115, 0.115, 0.34, 8), 0xc0483a, [0, 0.17, 0], [0, 0, 0.35]),
-      part(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 8), 0xd8d8d8, [0.06, 0.17, 0], [0, 0, 0.35])
+      part(new THREE.CylinderGeometry(0.115, 0.115, 0.34, 8), 0xff4d4d, [0, 0.17, 0], [0, 0, 0.35]),
+      part(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 8), 0xfff0f0, [0.06, 0.17, 0], [0, 0, 0.35])
     ]);
   },
   tire(rand) {
@@ -31,12 +31,12 @@ const DEBRIS_BUILDERS = {
   net(rand) {
     const parts = [];
     for (let i = 0; i < 5; i++) {
-      parts.push(part(new THREE.CylinderGeometry(0.02, 0.02, 1.5, 3), 0x9aa8a0,
+      parts.push(part(new THREE.CylinderGeometry(0.02, 0.02, 1.5, 3), 0x5ce6c8,
         [(rand() - 0.5) * 0.9, 0.06 + rand() * 0.14, (rand() - 0.5) * 0.9],
         [Math.PI / 2, rand() * Math.PI, rand() * 0.5]));
     }
     for (let i = 0; i < 3; i++) {
-      parts.push(part(new THREE.TorusGeometry(0.3 + rand() * 0.25, 0.02, 3, 7), 0xb0bcb4,
+      parts.push(part(new THREE.TorusGeometry(0.3 + rand() * 0.25, 0.02, 3, 7), 0x9cf7e4,
         [(rand() - 0.5) * 0.6, 0.05, (rand() - 0.5) * 0.6], [Math.PI / 2 + (rand() - 0.5) * 0.5, rand(), 0]));
     }
     return mergeParts(parts);
@@ -91,7 +91,7 @@ export function createDebris({ terrain, group, quality, rand, timeUniform }) {
   const staticPositions = [];
   const shelters = [];
   const floating = [];
-  const scale = quality === 'low' ? 0.35 : quality === 'medium' ? 0.6 : 0.8;
+  const scale = quality === 'low' ? 0.35 : quality === 'medium' ? 0.6 : 1.1;
 
   const matrix = new THREE.Matrix4();
   const quat = new THREE.Quaternion();

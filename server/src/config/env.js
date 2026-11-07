@@ -28,7 +28,9 @@ export const config = Object.freeze({
   merchantInitialTreasury: integer('MERCHANT_INITIAL_TREASURY', 10_000, 1, 1_000_000_000),
   nearNetwork: process.env.NEAR_NETWORK || 'testnet',
   nearRpcUrl: url('NEAR_RPC_URL', 'https://rpc.testnet.near.org', ['https:', 'http:']),
-  nearContractId: process.env.NEAR_CONTRACT_ID || ''
+  nearContractId: process.env.NEAR_CONTRACT_ID || '',
+  merchantContractId: process.env.NEAR_MERCHANT_CONTRACT_ID || ''
 });
 if (config.nearContractId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.nearContractId)) throw new Error('NEAR_CONTRACT_ID must be a Testnet account');
+if (config.merchantContractId && !/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(config.merchantContractId)) throw new Error('NEAR_MERCHANT_CONTRACT_ID must be a Testnet account');
 if (config.nearNetwork !== 'testnet') throw new Error('Only NEAR Testnet is permitted by this project configuration');

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateKeyPairSync,sign,randomBytes} from 'node:crypto';
-import {decode58,messageHash,verifyMessage,challenge,bindWallet,reconcile} from '../src/services/near.js';
+import {decode58,messageHash,verifyMessage,challenge,bindWallet,reconcile,verifyMerchantTransaction} from '../src/services/near.js';
 import {createGuestSession} from '../src/services/sessions.js';
 import {testDatabase} from './database.js';
 import {config} from '../src/config/env.js';
@@ -18,6 +18,17 @@ test('NEP-413 verifies signatures and binds nonce recipient callback and message
  assert.equal(verifyMessage(p,publicKey,signature.slice(1)),false);
  assert.equal(verifyMessage(p,'ed25519:0',signature),false);
  assert.deepEqual(decode58('111'),Buffer.alloc(3));assert.throws(()=>decode58('0'));
+});
+test('merchant UI transaction verification requires matching Testnet signer, receiver and final receipt',async()=>{
+ const hash='A'.repeat(43),signer='player.testnet',receiver=config.merchantContractId;
+ if(!receiver)return;
+ const base={final_execution_status:'FINAL',transaction:{hash,signer_id:signer,receiver_id:receiver,actions:[{FunctionCall:{method_name:'accept_purchase_order'}}]},status:{SuccessValue:''},receipts_outcome:[{outcome:{executor_id:receiver,status:{SuccessValue:''},logs:['EVENT_JSON:'+JSON.stringify({standard:'nep245',event:'mt_transfer'})]}}]};
+ const query=async(method,params)=>{assert.equal(method,'EXPERIMENTAL_tx_status');assert.deepEqual(params,{tx_hash:hash,sender_account_id:signer,wait_until:'FINAL'});return base;};
+ assert.deepEqual(await verifyMerchantTransaction(hash,signer,query),{hash,status:'final',method:'accept_purchase_order',events:[{standard:'nep245',event:'mt_transfer'}]});
+ assert.equal((await verifyMerchantTransaction(hash,signer,async()=>({...base,final_execution_status:'EXECUTED'}))).status,'pending');
+ assert.equal((await verifyMerchantTransaction(hash,signer,async()=>({...base,receipts_outcome:[{outcome:{executor_id:receiver,status:{Failure:{error:'failed'}},logs:[]}}]}))).status,'failed');
+ await assert.rejects(verifyMerchantTransaction(hash,signer,async()=>({...base,transaction:{...base.transaction,receiver_id:'other.testnet'}})),/transaction_mismatch/);
+ await assert.rejects(verifyMerchantTransaction(hash,signer,async()=>({...base,transaction:{...base.transaction,actions:[{FunctionCall:{method_name:'transfer'}}]}})),/transaction_method_not_supported/);
 });
 test('wallet binding and chain reconciliation with mocked RPC', {skip:!process.env.TEST_DATABASE_URL},async t=>{
  const f=await testDatabase();t.after(f.close);const db=f.db;

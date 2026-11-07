@@ -9,8 +9,28 @@ test('market price remains bounded and moves at most ten percent per tick', () =
   assert.match(result.reason, /scarce/);
 });
 
+test('price falls when merchant demand is exhausted', () => {
+  const result = nextPrice({ basePrice: 50, marketStock: 20, targetStock: 20, demand: 0, population: 50, capacity: 100, previousPrice: 50 });
+  assert.equal(result.price, 45);
+  assert.match(result.reason, /demand exhausted/);
+});
+
 test('market pricing rejects population above capacity', () => {
   assert.throws(() => nextPrice({ basePrice: 10, marketStock: 0, targetStock: 1, demand: 0, population: 2, capacity: 1, previousPrice: 10 }), RangeError);
+});
+
+test('demo seed covers every catchable fish with distinct starting price and demand', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const [seed, fish] = await Promise.all([
+    readFile(new URL('../src/db/seed.js', import.meta.url), 'utf8'),
+    readFile(new URL('../../js/fish.js', import.meta.url), 'utf8')
+  ]);
+  const seeded = [...seed.matchAll(/\{ id: '([^']+)', name: '[^']+', rarity: '[^']+', price: (\d+), need: (\d+),/g)];
+  const catchable = [...fish.split('];', 1)[0].matchAll(/\{ id: '([^']+)', name:/g)].map(([, id]) => id);
+  assert.equal(seeded.length, catchable.length);
+  assert.deepEqual(seeded.map(([, id]) => id).sort(), catchable.sort());
+  assert.ok(new Set(seeded.map(([, , price]) => price)).size > 1);
+  assert.ok(new Set(seeded.map(([, , , need]) => need)).size > 1);
 });
 
 test('population regeneration carries fixed-point fractions and caps at capacity', () => {

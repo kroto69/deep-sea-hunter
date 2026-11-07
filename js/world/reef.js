@@ -25,7 +25,7 @@ const CORAL_BUILDERS = {
       const tilt = (rand() - 0.5) * 0.95;
       parts.push(part(
         new THREE.ConeGeometry(0.1 + rand() * 0.08, h, 5),
-        [0xff7a94, 0xff9d6b, 0xe86a8a][i % 3],
+        [0xff4f7b, 0xff8a3d, 0xff3d8f][i % 3],
         [(rand() - 0.5) * 0.5, h * 0.5, (rand() - 0.5) * 0.5],
         [tilt, rand() * Math.PI, tilt * 0.6],
         [1, 1, 1]
@@ -37,12 +37,12 @@ const CORAL_BUILDERS = {
     const parts = [];
     const r = 0.7 + rand() * 0.5;
     parts.push(part(new THREE.SphereGeometry(r, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
-      0x7ac8a0, [0, 0, 0], [0, 0, 0], [1, 0.62, 1]));
+      0x3fe0a0, [0, 0, 0], [0, 0, 0], [1, 0.62, 1]));
     for (let i = 0; i < 5; i++) {
       const a = rand() * Math.PI * 2;
       const d = r * 0.45 * rand();
       parts.push(part(new THREE.SphereGeometry(r * 0.4, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2),
-        [0x8fd8b0, 0x62b892][i % 2],
+        [0x9bffcf, 0x2fcf8a][i % 2],
         [Math.cos(a) * d, r * 0.1, Math.sin(a) * d], [0, 0, 0], [1, 0.5, 1]));
     }
     return mergeParts(parts);
@@ -52,8 +52,8 @@ const CORAL_BUILDERS = {
     const r = 0.9 + rand() * 0.8;
     return mergeParts([
       part(new THREE.CylinderGeometry(0.1, 0.16, h, 5), 0x9a7a4a, [0, h * 0.5, 0]),
-      part(new THREE.CylinderGeometry(r, r * 0.86, 0.14, 8), 0xd8a04a, [0, h, 0], [0, rand() * 1.2, 0.05]),
-      part(new THREE.CylinderGeometry(r * 0.55, r * 0.5, 0.1, 7), 0xe8bc70, [r * 0.7, h * 0.72, r * 0.3], [0, 0, 0.12])
+      part(new THREE.CylinderGeometry(r, r * 0.86, 0.14, 8), 0xffb636, [0, h, 0], [0, rand() * 1.2, 0.05]),
+      part(new THREE.CylinderGeometry(r * 0.55, r * 0.5, 0.1, 7), 0xffd56a, [r * 0.7, h * 0.72, r * 0.3], [0, 0, 0.12])
     ]);
   },
   fan(rand) {
@@ -62,7 +62,7 @@ const CORAL_BUILDERS = {
     for (let i = 0; i < 4; i++) {
       parts.push(part(
         new THREE.OctahedronGeometry(0.8, 0),
-        0xff8a3c,
+        0xff6a1f,
         [(rand() - 0.5) * 0.5, h + (rand() - 0.5) * 0.4, (rand() - 0.5) * 0.3],
         [0, rand() * Math.PI, 0],
         [1.1, 0.9, 0.12]
@@ -77,7 +77,7 @@ const CORAL_BUILDERS = {
       const h = 0.7 + rand() * 1.2;
       parts.push(part(
         new THREE.CylinderGeometry(0.16, 0.2, h, 6, 1, true),
-        [0x9a5ad8, 0xc07ae8, 0x7a4ac0][i % 3],
+        [0xa64dff, 0xd27bff, 0x7f3dff][i % 3],
         [(rand() - 0.5) * 0.5, h * 0.5, (rand() - 0.5) * 0.5],
         [(rand() - 0.5) * 0.25, 0, (rand() - 0.5) * 0.25]
       ));
@@ -93,7 +93,7 @@ const CORAL_BUILDERS = {
       const d = rand() * 0.5;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       parts.push(part(new THREE.CylinderGeometry(0.07, 0.09, h, 4), 0xc0a070, [x, h * 0.5, z]));
-      parts.push(part(new THREE.CylinderGeometry(0.36, 0.42, 0.1, 7), 0xe8d8b0, [x, h, z], [0, rand(), 0]));
+      parts.push(part(new THREE.CylinderGeometry(0.36, 0.42, 0.1, 7), 0xfff0a8, [x, h, z], [0, rand(), 0]));
     }
     return mergeParts(parts);
   },
@@ -149,7 +149,7 @@ export function createReef({ terrain, group, quality, rand }) {
   const disposables = [];
   const meshes = [];
   const instanced = [];
-  const scale = quality === 'low' ? 0.22 : quality === 'medium' ? 0.48 : 0.72;
+  const scale = quality === 'low' ? 0.22 : quality === 'medium' ? 0.48 : 1.0;
 
   const placementMode = new Map(); // habitat id -> density table accessor
 
@@ -242,14 +242,14 @@ export function createReef({ terrain, group, quality, rand }) {
   const coralMeshes = {};
   const coralPositions = Object.create(null);
   const colonyBudget = {
-    branching: Math.round(46 * scale),
-    brain: Math.round(34 * scale),
-    table: Math.round(26 * scale),
-    fan: Math.round(30 * scale),
-    tube: Math.round(26 * scale),
-    mushroom: Math.round(30 * scale),
-    anemone: Math.round(28 * scale),
-    dead: Math.round(26 * scale)
+    branching: Math.round(30 * scale),
+    brain: Math.round(22 * scale),
+    table: Math.round(18 * scale),
+    fan: Math.round(20 * scale),
+    tube: Math.round(18 * scale),
+    mushroom: Math.round(20 * scale),
+    anemone: Math.round(18 * scale),
+    dead: Math.round(18 * scale)
   };
 
   for (const [type, count] of Object.entries(colonyBudget)) {
@@ -309,7 +309,7 @@ export function createReef({ terrain, group, quality, rand }) {
   // Nine families, one instanced draw each: boulders, plates, fans, tubes, softs.
   const FAMILIES = ['staghorn','brain','table','plate','fan','tube','mushroom','boulder','soft'];
   for (const [familyIndex, family] of FAMILIES.entries()) {
-    const count = quality === 'low' ? 1 : quality === 'medium' ? 3 : 6;
+    const count = quality === 'low' ? 1 : quality === 'medium' ? 3 : 1;
     const mesh = makeInstanced(coralFamilyGeometry(family), count);
     mesh.name = family;
     for (let i = 0; i < count; i++) {

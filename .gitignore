@@ -1,6 +1,7 @@
 # Dependencies and generated builds
 node_modules/
 contracts/collectibles/target/
+contracts/merchant/target/
 dist/
 build/
 coverage/

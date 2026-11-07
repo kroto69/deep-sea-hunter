@@ -91,7 +91,6 @@ export async function submitShot(db, identity, huntId, body, idempotencyKey) {
       FROM catch_sessions WHERE id=$1`, [huntId, equipment[0].last_shot_at]);
     const check = checks[0];
     if (hunt.revoked_at || !check.active) throw new HuntError('hunt_expired', 410);
-    if (Math.min(hunt.equipment_level, equipment[0].speargun_level) < fish.min_equipment_level) throw new HuntError('equipment_insufficient', 403);
     if (hunt.shots_used >= hunt.max_shots) throw new HuntError('shot_limit_reached', 429);
     if (!check.allowed) throw new HuntError('shot_rate_limited', 429);
     if (populations[0].population_count < 1) throw new HuntError('population_depleted', 409);

@@ -30,6 +30,9 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.dpr));
 renderer.setSize(window.innerWidth, window.innerHeight);
+// Filmic response + sRGB keeps reef hues saturated instead of washing to grey.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 
 const { scene, camera, sun } = createScene(renderer, preset);
 const environment = createEnvironment(scene, { quality });

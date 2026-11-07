@@ -25,7 +25,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
   const debris = createDebris({ terrain, group, quality, rand, timeUniform });
 
   // --- Atmosphere: bubbles, suspended particles, organic motes, light rays ---
-  const bubbleCount = quality === 'low' ? 35 : quality === 'medium' ? 65 : 100;
+  const bubbleCount = quality === 'low' ? 60 : quality === 'medium' ? 110 : 160;
   const bGeo = new THREE.BufferGeometry();
   const bPos = new Float32Array(bubbleCount * 3);
   const bubbleData = [];
@@ -46,7 +46,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
   group.add(bubbles);
   disposables.push(bGeo, bMat);
 
-  const moteCount = quality === 'low' ? 80 : quality === 'medium' ? 140 : 220;
+  const moteCount = quality === 'low' ? 140 : quality === 'medium' ? 240 : 380;
   const pGeo = new THREE.BufferGeometry();
   const pPos = new Float32Array(moteCount * 3);
   for (let i = 0; i < moteCount; i++) {
@@ -63,7 +63,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
   disposables.push(pGeo, pMat);
 
   // Organic motes: larger, slower, warmer — reads as plankton
-  const organicCount = quality === 'low' ? 35 : 65;
+  const organicCount = quality === 'low' ? 65 : 120;
   const oGeo = new THREE.BufferGeometry();
   const oPos = new Float32Array(organicCount * 3);
   for (let i = 0; i < organicCount; i++) {
@@ -83,7 +83,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
   const glowData = [];
   const grottos = reef.grottos || [];
   for (const g of grottos) {
-    for (let i = 0; i < (quality === 'low' ? 10 : 18); i++) {
+    for (let i = 0; i < (quality === 'low' ? 18 : 32); i++) {
       const a = rand() * Math.PI * 2, d = 1.5 + rand() * (g.radius - 3.2);
       glowData.push({ x: g.x + Math.cos(a) * d, y: g.y + 1.2 + rand() * 4.5, z: g.z + Math.sin(a) * d, phase: rand() * 6.28 });
     }
@@ -93,7 +93,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
     const gGeo = new THREE.BufferGeometry();
     gGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(glowData.length * 3), 3));
     const gMat = new THREE.PointsMaterial({
-      color: 0x7ff2dd, size: 0.5, transparent: true, opacity: 0.85,
+      color: 0x5fffe0, size: 0.6, transparent: true, opacity: 0.85,
       depthWrite: false, blending: THREE.AdditiveBlending
     });
     glow = new THREE.Points(gGeo, gMat);
@@ -102,7 +102,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
   }
 
   const rayMat = new THREE.MeshBasicMaterial({
-    color: 0x9fd8ff, transparent: true, opacity: 0.08,
+    color: 0xbff0ff, transparent: true, opacity: 0.1,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
   });
   const rays = new THREE.Group();
@@ -156,7 +156,7 @@ export function createEnvironment(scene, { quality = 'high' } = {}) {
     particles.rotation.y = t * 0.01;
     organic.rotation.y = -t * 0.006;
     for (let i = 0; i < rays.children.length; i++) {
-      rays.children[i].material.opacity = 0.05 + Math.abs(Math.sin(t * 0.3 + i)) * 0.06;
+      rays.children[i].material.opacity = 0.07 + Math.abs(Math.sin(t * 0.3 + i)) * 0.08;
     }
   }
 

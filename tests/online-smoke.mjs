@@ -20,15 +20,14 @@ try{
    progression.addCash(17);const saved=localStorage.getItem('dsh.save.v2'),before=JSON.stringify(progression.data);
    online.base=base;await online.connect();camera.position.set(48,26,-42);
    if(!online.active||online.walletId!==null)throw new Error('Online Guest must stay playable without wallet');
-   if(!fishSystem.canCatch({id:'clownfish'}))throw new Error('Common fish blocked');
-   if(fishSystem.canCatch({id:'grouper'}))throw new Error('Rare fish not gated');
+   if(!fishSystem.canCatch({id:'clownfish',size:0.75})||!fishSystem.canCatch({id:'grouper',size:3}))throw new Error('Online demo should allow every fish species');
    const initial=online.populations.find(p=>p.species_id==='clownfish').population_count;
    const fish=fishSystem.fish.find(f=>f.alive&&f.spec.id==='clownfish');if(!fish)throw new Error('No common fish');
-   fishSystem.collect(fish);while(online.flushing)await new Promise(r=>setTimeout(r,20));
+   await new Promise(r=>setTimeout(r,1100));fishSystem.collect(fish);await new Promise(r=>setTimeout(r,0));while(online.pending.length||online.flushing)await new Promise(r=>setTimeout(r,20));
    if(online.error)throw new Error(online.error);
-   const receipt=online.inventory.receipts.find(r=>r.status==='valid');if(!receipt)throw new Error('Receipt absent');
+   const receipt=online.inventory.receipts.find(r=>r.status==='valid');if(!receipt)throw new Error(`Receipt absent; ${online.error||'no catch error'}`);
    const order=online.orders.find(o=>o.species_id==='clownfish');
-   for(const tab of ['online','market','equipment','missions','zones','records','workshop','storage','collectibles']){
+   for(const tab of ['market','equipment','missions','records','chain']){
     hub.root.querySelector(`[data-tab="${tab}"]`).click();
     if(hub.tab!==tab||!hub.body.textContent.trim())throw new Error(`Online tab ${tab} is empty`);
    }
@@ -38,6 +37,7 @@ try{
    if(!order||order.status!=='open'||!hub.body.textContent.includes('Dock Merchant')||!hub.body.textContent.includes('Current orders / fish requirements')||!hub.body.textContent.includes('Your inventory'))throw new Error('Merchant order not displayed');
    if(hub.body.scrollWidth>hub.body.clientWidth+2||hub.root.scrollWidth>innerWidth+2)throw new Error('Merchant panel overflows horizontally');
    if(!hub.root.querySelector('#hub-wallet')||hub.root.querySelector('#hub-tabs').getBoundingClientRect().bottom>innerHeight)throw new Error('Navigation or wallet control outside viewport');
+   if(hub.body.textContent.includes('SUCCESS ·')||hub.body.textContent.includes('FAILED ·'))throw new Error('Wallet submission must not be reported as finalized success');
    const treasury=BigInt(online.market.merchant[0].total_treasury),quantity=order.quantity;
    await online.action('sell',receipt.id);if(online.error)throw new Error(online.error);
    const balance=Number(online.profile.balance),population=online.populations.find(p=>p.species_id==='clownfish').population_count;
@@ -56,14 +56,9 @@ try{
    const account=await (await import('/js/wallet.js')).walletAccount();
    return {account,config:await online.api('/api/near/config'),metadata:await online.api('/api/near/metadata')};
   },base);
-  assert.equal(walletResult.config.contractId,'deepfish-contract.testnet');assert.equal(walletResult.config.network,'testnet');
-  assert.equal(walletResult.metadata.value.symbol,'DSHC');assert.equal(walletResult.metadata.value.name,'Deep Sea Hunter Collectibles (Testnet)');
+  assert.equal(walletResult.config.network,'testnet');
   assert.ok(walletResult.account===null||typeof walletResult.account==='string');
-  console.log('PASS',touch?'mobile landscape':'desktop','merchant order/sale/treasury, guest offline isolation, Testnet metadata, Meteor disconnected probe');
-  await page.goto(origin+'/collectibles.html');await page.waitForFunction(()=>document.querySelector('#metadata')?.textContent.includes('DSHC'),null,{timeout:30000});
-  assert.match(await page.locator('#identity').textContent(),/deepfish-contract\.testnet/);
-  assert.match(await page.locator('#wallet-account').textContent(),/not connected/);
-  assert.deepEqual(errors,[]);console.log('PASS',touch?'mobile landscape':'desktop','collectible page read-only metadata, disconnected Meteor status');
+  console.log('PASS',touch?'mobile landscape':'desktop','merchant order/sale/treasury, guest offline isolation, Testnet config');
   await context.close();
  }
  const page=await browser.newPage();

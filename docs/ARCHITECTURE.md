@@ -1,65 +1,31 @@
 # Deep Sea Hunter Architecture
 
-## Current systems
+## Status boundaries
 
-### Game and saves
+- Gameplay, controls, progression, Guest save and existing Boat Hub tabs passed headless desktop/mobile browser checks. Physical-device performance is UNVERIFIED.
+- Offline Guest uses browser `dsh.save.v2`. Online Guest uses Fastify/PostgreSQL. They remain separate.
+- Online demo economy accepts all 19 fish in `js/fish.js`; per-fish base prices and merchant demand are seeded in PostgreSQL. Receipts, stock, demand, and CR settlement stay off-chain. Unit and isolated PostgreSQL integration tests pass.
+- Fast Forward is SIMULATED locally. It changes no save, backend row or blockchain state.
+- NEAR tab exposes merchant state, storage deposit, sell, and withdrawal calls against configured Testnet merchant. Returned hashes are labelled SUBMITTED · FINALITY UNVERIFIED until finality and RPC state are checked. One Testnet sale is independently verified; evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. Mint remains disabled; NEP-245 compliance is unverified.
+- Google/Email identity is NOT IMPLEMENTED. Disabled controls do not authenticate. Guest remains playable.
 
-The game runs in the browser using Three.js and JavaScript modules. Gameplay, controls, fish AI, oxygen, equipment, and local progression use the `dsh.save.v2` save. Local saves are not automatically cloud-saved.
+## NEAR boundaries
 
-### Players and sessions
+Wallet Selector is optional for explicit NEAR actions. Normal gameplay does not require wallet, seed phrase, popup or gas. The deployed `deepfish-contract.testnet` NFT contract is separate and untouched.
 
-- **Player Account**: a future cross-device game identity using Google/Email. Not available yet.
-- **Guest Account**: play without external login. Offline Guest data stays in the browser. Online Guest receives a player row and bearer session in Fastify/PostgreSQL; this is not a permanent cross-device identity.
-- **Player Profile**: online economy data belongs to a separate player row. Google/Email profiles do not exist yet.
-- **Cloud Save**: cross-device progression sync is not available.
+`contracts/merchant/` is a separate prototype. Local WASM build and Sandbox economy pass; SHA-256 `95def7894af73741aa87d1a1a0ceb14c75011b047382288a5882a2ae664be32d`. One `accept_purchase_order` sale and storage top-up verified final on Testnet; full evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. NEP-245 blockers remain; local build/Sandbox do not prove compliance.
 
-### Economy
+## Merchant audit blockers
 
-Online Guest uses Fastify and PostgreSQL. The backend manages sessions, validated catch receipts, player balance, inventory, equipment, missions, zones, and settlement. Catch validation is labeled `client_simulated_validated`; it is not proof of physical action or full anti-cheat.
+Cross-contract receiver behavior lacks runtime receiver integration. Event JSON has source serialization but no exact runtime-log assertion. Storage minimum measures registration bytes, not per-token balance/metadata growth. Metadata JSON ABI and token ownership representation need official-spec verification. Resolver rollback/failure behavior is unit-tested only and needs runtime validation. Batch length/approval checks exist, but hard size/duplicate restrictions and arithmetic/edge behavior need compatibility review.
 
-One deterministic Dock Merchant has treasury, inventory, demand, and orders. Its tick uses existing species/population data and budget/order/reserve limits. Selling requires a valid quote and a receipt owned by the player; the backend locks related records and writes transaction/ledger entries atomically.
-
-The three ledgers are separate:
-
-1. **Player Balance**: off-chain funds owned by a player profile.
-2. **Merchant Treasury**: Merchant budget for buying fish from players.
-3. **Game Treasury**: internal game ledger for existing upgrades/zones/rewards.
-
-Fish sales debit the Merchant and credit the Player. Game Treasury is not a wallet balance or Merchant Treasury. Offline credits and saves remain local and separate from backend data.
-
-### NEAR and NFTs
-
-- **Player Wallet**: Meteor Wallet or another Wallet Selector provider. Controls a NEAR account and signs blockchain actions. Optional; not game login and not required to play.
-- **Contract Account**: `deepfish-contract.testnet`, the account where the NFT contract runs.
-- **Owner Account**: `deepfish-owner.testnet`, the administrator initialized in the contract. Owner authority differs from a player wallet.
-- **NFT**: an on-chain asset separate from ordinary fish, game credits, and Merchant ledger. Displaying a wallet account does not prove backend identity; NEP-413 binds a wallet to a session separately.
-
-The contract was deployed and initialized on NEAR Testnet according to evidence recorded in `PROJECT_STATUS.md`. Source contains NFT and marketplace methods; this does not prove mint/list/buy/transfer transactions occurred or that UI passed end-to-end. Current contract mint accepts generic metadata and does not prove a fish or rarity came from a game capture.
-
-## Current flows
+## Data flow
 
 ```text
-Offline Guest: browser gameplay → local dsh.save.v2 → offline Fish Market
-Online Guest: browser → Fastify session → PostgreSQL player/profile → catch receipt → Dock Merchant quote/sale → Player + Merchant ledgers
-Wallet: player selects provider → Meteor/NEAR Wallet → explicit signing → Testnet contract
+Offline Guest → browser save → local Fish Market
+Online Guest → Fastify session → PostgreSQL receipts/merchant → off-chain credits
+Optional wallet → explicit NEAR signing → separate deployed NFT or future authorized merchant contract
+Fast Forward → local deterministic state → display only
 ```
 
-Wallet flow is separate from Guest/account authentication. Google/Email account login and cloud saves do not exist yet. Disconnecting a wallet is not intended to log out of a game account.
-
-## Planned target
-
-```text
-Google/Email identity → backend account/session → player profile → cloud save
-Guest remains available; no automatic merging
-Player selects a capture → backend mint eligibility/unique claim → wallet signature → NFT contract
-```
-
-This requires account identity/session, email delivery and Google OAuth credentials, recovery rules, cloud-save conflict handling, provenance checks, and one-time mint linkage. Do not link accounts automatically because email addresses match; do not treat a Google account as a NEAR account.
-
-## System boundaries
-
-- Merchant Agent is neither a wallet nor a smart contract; it is deterministic and backend-controlled.
-- Catch receipts are not NFTs.
-- Prices, populations, orders, and game credits are off-chain.
-- No project token/coin exists in the MVP.
-- Testnet is not Mainnet; deployment is not proof of real marketplace transactions.
+See `README.md` for run commands, `ROADMAP.md` for blockers, and `docs/ONCHAIN_ECONOMY_PROOF.md` for evidence rules.

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { part, mergeParts } from './geo.js';
 
-const COLORS = [0xe59b78, 0xd394b2, 0xa79ad2, 0xddbd70, 0x68b8bc, 0x8cc393];
+// Saturated, sun-lit reef hues: pastel tones greyed out under water fog.
+const COLORS = [0xff7a5c, 0xff5fa2, 0x9b7bff, 0xffc94a, 0x2fd8d0, 0x6ff08a];
 export const CORAL_VARIANTS = Array.from({length: 27}, (_, i) => ({
   id: `${['staghorn','brain','table','plate','fan','tube','mushroom','boulder','soft'][i % 9]}-${Math.floor(i / 9) + 1}`,
   family: ['staghorn','brain','table','plate','fan','tube','mushroom','boulder','soft'][i % 9],
@@ -40,7 +41,7 @@ export function coralGeometry({family, form = 0, color = COLORS[0]}) {
     add(new THREE.SphereGeometry(1,8,5),[0,.5,0],[0,0,0],[1,h*.65,.85]);
     if(family==='brain') for(let i=0;i<5;i++) {
       const g=new THREE.TorusGeometry(.45+i*.07,.035,3,8,Math.PI*1.5);
-      add(g,[(i-2)*.23,.55,0],[0,i*.6,0],[1,h,1],0xd9d3a1);
+      add(g,[(i-2)*.23,.55,0],[0,i*.6,0],[1,h,1],0xfff2b0);
     }
   } else if(['table','plate','mushroom'].includes(family)) {
     const n=family==='plate'?4:family==='mushroom'?3:2;
@@ -62,7 +63,7 @@ export function coralGeometry({family, form = 0, color = COLORS[0]}) {
       const a=i*2.4,x=Math.cos(a)*.45,z=Math.sin(a)*.45,y=.6+i*.14;
       add(new THREE.CylinderGeometry(.18,.22,y,5,1,true),[x,y/2,z]);
       add(new THREE.TorusGeometry(.18,.035,3,6),[x,y,z],[Math.PI/2,0,0]);
-      add(new THREE.CircleGeometry(.145,5),[x,y-.12,z],[-Math.PI/2,0,0],[1,1,1],0x3c5266);
+      add(new THREE.CircleGeometry(.145,5),[x,y-.12,z],[-Math.PI/2,0,0],[1,1,1],0x1a4a6e);
     }
   }
   const geo=mergeParts(parts);

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 export const PALETTE = Object.freeze({
-  ocean: 0x123e56, turquoise: 0x518f91, sand: 0xd6c6a1,
-  deepSand: 0xa0a58f, stone: 0x8d9087, stoneShade: 0x626f70,
-  grass: 0x758973, shell: 0xe2d3bb
+  ocean: 0x0f5a7a, turquoise: 0x2fc4c0, sand: 0xf2deb0,
+  deepSand: 0xc9c09a, stone: 0x9a9890, stoneShade: 0x6a7c80,
+  grass: 0x7fb070, shell: 0xffe6cc
 });
 
 // Closed, stratified eight-sided outcrop: broad foot, ledge, offset crown.

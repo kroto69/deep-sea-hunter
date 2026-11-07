@@ -272,7 +272,7 @@ html, body {
   height: min(94dvh, 900px);
   max-height: 94dvh;
   display: flex; flex-direction: column;
-  background: linear-gradient(180deg, rgba(10,42,66,0.98), rgba(4,24,40,0.98));
+  background: linear-gradient(180deg, rgba(12,62,92,0.97), rgba(6,32,54,0.97));
   border: 1px solid rgba(120,200,255,0.35);
   border-radius: 8px;
   padding: 16px;
@@ -288,10 +288,7 @@ html, body {
 #hub-cash { color: #d6f4d8; font-size: 18px; font-weight: bold; letter-spacing: 1px; white-space: nowrap; }
 #hub-wallet { color: #bdeaf0; background: #103a48; border: 0; padding: 10px 12px; font-size: 10px; letter-spacing: .5px; cursor: pointer; border-radius: 3px; white-space: nowrap; }
 #hub-close { font-size: 24px; line-height: 1; padding: 5px 11px; }
-#hub-secondary { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
-#hub-secondary button { border: 0; background: none; color: #6f9bab; font-size: 9px; padding: 3px 0; cursor: pointer; }
-#hub-secondary button.active { color: #a5e2dc; }
-#hub-scope { margin-left: auto; color: #517e8c; font: 9px monospace; letter-spacing: 1px; }
+#hub-scope { color: #6fb7c8; font: 9px monospace; letter-spacing: 1px; margin: 0 0 6px; }
 #hub-close {
   background: rgba(60,120,160,0.5);
   border: 1px solid rgba(140,210,255,0.5);
@@ -301,21 +298,19 @@ html, body {
   cursor: pointer;
   font-size: 12px;
 }
-#hub-tabs { display: flex; gap: 20px; margin: 8px 0 4px; border-bottom: 1px solid rgba(120,200,255,.12); overflow-x: auto; flex: none; touch-action: pan-x; scrollbar-width: thin; }
-#hub-tabs button { border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; background: none !important; padding: 10px 2px !important; color: #7194a5 !important; font-size: 10px !important; letter-spacing: .6px; }
-#hub-tabs button.active { border-bottom-color: #63c6bb !important; color: #d5f3ea !important; font-weight: bold; }
-#hub-tabs button {
-  background: rgba(20,60,90,0.7);
-  border: 1px solid rgba(120,200,255,0.28);
-  color: #a9d8f0;
-  padding: 7px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  white-space: nowrap; flex: none;
-  cursor: pointer;
-}
-#hub-tabs button.active { background: rgba(60,160,220,0.7); color: #04202e; font-weight: bold; }
+/* One row of pill tabs: big tap targets, active tab clearly filled. */
+#hub-tabs { display: flex; gap: 6px; margin: 10px 0 6px; overflow-x: auto; flex: none; touch-action: pan-x; scrollbar-width: none; }
+#hub-tabs button { flex: none; min-height: 36px; padding: 0 14px; border: 1px solid rgba(120,220,255,.25); border-radius: 999px; background: rgba(20,70,100,.55); color: #bfe9f5; font-size: 11px; font-weight: bold; letter-spacing: .8px; white-space: nowrap; cursor: pointer; }
+#hub-tabs button.active { background: linear-gradient(135deg,#3fe0c8,#2fa8ff); border-color: transparent; color: #03202c; }
 #hub-body { overflow-y: auto; min-height: 0; padding: 4px 4px 0 0; touch-action: pan-y; }
+#hub-body button { transition: filter .15s, transform .15s, border-color .15s; }
+#hub-body button:hover:not(:disabled), #hub-tabs button:hover { filter: brightness(1.18); }
+#hub-body button:active:not(:disabled) { transform: translateY(1px); }
+#hub-body button:focus-visible, #hub-tabs button:focus-visible, #hub-wallet:focus-visible { outline: 2px solid #8be4d0; outline-offset: 2px; }
+.hub-simulation { margin: 14px 0; padding: 12px; border: 1px solid #bd9556; background: #302f2a; color: #e8d5ac; }
+.hub-simulation h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 1px; }
+.hub-simulation p, .hub-simulation ol { font-size: 11px; line-height: 1.7; }
+.hub-simulation ol { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px 14px; padding-left: 20px; }
 .market-feedback { min-height: 0; color: #b5cbd2; font-size: 11px; }
 .market-feedback:not(:empty) { padding: 7px 0; }
 .market-feedback.is-error { color: #ff9e83; }
@@ -382,8 +377,9 @@ html, body {
 #hub:has([data-tab="zones"].active) .hub-station { border-color: #93c389; background: #2b493c; }
 #hub-body details { padding: 8px 4px; font-size: 12px; }
 #hub-body summary { cursor: pointer; color: #a9eac9; }
-@media (max-width: 700px) { #hub-head { gap: 8px; flex-wrap: wrap; } .hub-title { min-width: 100px; } .hub-identity { max-width: 90px; } #hub-wallet { padding: 10px 8px; font-size: 9px; } #hub-tabs { gap: 15px; } #hub-secondary { gap: 12px; } .market-columns { grid-template-columns: 1fr; gap: 14px; } .market-row { grid-template-columns: 28px minmax(65px,1fr) auto auto; gap: 7px; padding: 7px 0; } .market-metrics { gap: 8px; } .market-metrics strong { font-size: 15px; } }
-@media (max-height: 450px) { #hub { align-items: flex-start; } #hub-panel { max-height: 96dvh; padding: 8px 12px; } #hub-head { min-height: 38px; } .hub-title > span { display:none; } #hub-head h2 { font-size: 15px; } #hub-cash { font-size: 15px; } #hub-tabs { margin: 2px 0; gap: 12px; } #hub-tabs button { padding: 7px 2px !important; } #hub-secondary { margin-bottom: 2px; } .merchant-head { padding: 0 0 6px; } .merchant-portrait { width: 28px; height: 28px; } .market-metrics { padding: 7px 0; margin-bottom: 4px; } .market-metrics strong { font-size: 14px; } .market-row { padding: 5px 0; } .market-section-title h3 { margin: 4px 0; } .market-columns { gap: 8px; } .market-history { margin-top: 8px; } .market-history h3 { margin: 4px 0; } .hub-note { padding: 4px; } }
+@media (max-width: 700px) { #hub-head { gap: 8px; flex-wrap: wrap; } .hub-title { min-width: 100px; } .hub-identity { max-width: 90px; } #hub-wallet { padding: 10px 8px; font-size: 9px; } .market-columns { grid-template-columns: 1fr; gap: 14px; } .market-row { grid-template-columns: 28px minmax(65px,1fr) auto auto; gap: 7px; padding: 7px 0; } .market-metrics { gap: 8px; } .market-metrics strong { font-size: 15px; } }
+@media (max-width: 700px) { .hub-simulation ol { grid-template-columns: repeat(2,minmax(0,1fr)); } #hub-panel { width: min(98vw, 900px); } #hub-body { padding-right: 2px; } }
+@media (max-height: 450px) { #hub { align-items: flex-start; } #hub-panel { max-height: 96dvh; padding: 8px 12px; } #hub-head { min-height: 38px; } .hub-title > span { display:none; } #hub-head h2 { font-size: 15px; } #hub-cash { font-size: 15px; } #hub-tabs { margin: 2px 0; } #hub-tabs button { min-height: 30px; padding: 0 10px; } .merchant-head { padding: 0 0 6px; } .merchant-portrait { width: 28px; height: 28px; } .market-metrics { padding: 7px 0; margin-bottom: 4px; } .market-metrics strong { font-size: 14px; } .market-row { padding: 5px 0; } .market-section-title h3 { margin: 4px 0; } .market-columns { gap: 8px; } .market-history { margin-top: 8px; } .market-history h3 { margin: 4px 0; } .hub-note { padding: 4px; } }
 
 /* Welcome and field guide overlays */
 #welcome,#tutorial{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:linear-gradient(180deg,rgba(0,18,31,.25),rgba(0,12,23,.88));color:#e9f7f3;}

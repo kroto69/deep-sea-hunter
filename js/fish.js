@@ -132,7 +132,7 @@ export class FishSystem {
     this.fx = [];
     this.dying = [];
 
-    const density = quality === 'low' ? 0.2 : quality === 'medium' ? 0.35 : 0.55;
+    const density = quality === 'low' ? 0.35 : quality === 'medium' ? 0.6 : 0.9;
     const habitats = world.habitats || [];
     const habitatById = Object.fromEntries(habitats.map(h => [h.id, h]));
 

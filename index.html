@@ -93,19 +93,13 @@
       <button id="hub-close" type="button" aria-label="Close Boat Hub" title="Close Boat Hub">×</button>
     </div>
     <div id="hub-tabs">
-      <button data-tab="online">OVERVIEW</button>
-      <button data-tab="market" class="active">FISH MARKET</button>
-      <button data-tab="equipment">EQUIPMENT</button>
-      <button data-tab="missions">MISSIONS</button>
-      <button data-tab="zones">DIVE ZONES</button>
-      <button data-tab="records">RECORDS</button>
+      <button data-tab="market" class="active">FISH</button>
+      <button data-tab="equipment">GEAR</button>
+      <button data-tab="missions">JOBS</button>
+      <button data-tab="records">STATS</button>
+      <button data-tab="chain">NEAR</button>
     </div>
-    <div id="hub-secondary">
-      <button data-tab="workshop">WORKSHOP</button>
-      <button data-tab="storage">STORAGE</button>
-      <button data-tab="collectibles">COLLECTIBLES</button>
-      <span id="hub-scope">OFFLINE SAVE</span>
-    </div>
+    <span id="hub-scope"></span>
     <div id="hub-body"></div>
   </div>
 </div>
@@ -123,7 +117,7 @@
   <div class="welcome-card">
     <div class="welcome-scene" aria-hidden="true"><span class="welcome-ray"></span><span class="welcome-fish fish-one"></span><span class="welcome-fish fish-two"></span><span class="welcome-fish fish-three"></span><span class="welcome-coral"></span><span class="welcome-kelp"></span></div>
     <div class="welcome-copy"><span class="welcome-kicker">A LOW-POLY UNDERWATER EXPEDITION</span><h1 id="welcome-title">DEEP SEA<br>HUNTER</h1><p>Explore the ocean. Hunt responsibly. Build your legacy.</p><p id="welcome-account" class="welcome-account"></p>
-      <div class="welcome-actions"><button id="welcome-guest" type="button">CONTINUE AS GUEST</button><button id="welcome-google" type="button" disabled aria-describedby="google-status">CONTINUE WITH GOOGLE</button><small id="google-status">Google sign-in is not configured yet</small><button id="welcome-near" type="button">CONNECT NEAR WALLET</button><button id="welcome-continue" class="hidden" type="button">CONTINUE DIVING</button><button id="welcome-tutorial" class="welcome-subtle" type="button">HOW TO PLAY</button></div>
+      <div class="welcome-actions"><button id="welcome-guest" type="button">CONTINUE AS GUEST</button><button id="welcome-google" type="button" disabled aria-describedby="google-status">CONTINUE WITH GOOGLE</button><button id="welcome-email" type="button" disabled aria-describedby="email-status">CONTINUE WITH EMAIL</button><small id="google-status">Google sign-in unavailable · credentials not configured</small><small id="email-status">Email sign-in unavailable · identity and delivery service not implemented</small><button id="welcome-near" type="button">CONNECT NEAR WALLET</button><button id="welcome-continue" class="hidden" type="button">CONTINUE DIVING</button><button id="welcome-tutorial" class="welcome-subtle" type="button">HOW TO PLAY</button></div>
       <button id="welcome-logout" class="hidden welcome-subtle" type="button">DISCONNECT WALLET</button>
     </div>
   </div>

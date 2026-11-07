@@ -5,6 +5,9 @@ export const WALLETS = [
 ];
 const storageKey = 'dsh.wallet.provider';
 let selector;
+export function functionCallAction(methodName,args,deposit='1') {
+  return {functionCall:{methodName,args:new TextEncoder().encode(JSON.stringify(args)),gas:100000000000000n,deposit:BigInt(deposit)}};
+}
 export function selectedWallet() {
   const id = localStorage.getItem(storageKey);
   return WALLETS.some(w => w.id === id) ? id : 'meteor-wallet';

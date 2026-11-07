@@ -121,8 +121,8 @@ export function createTerrain(quality = 'high') {
 
     c.copy(sand).lerp(deepSand, depthT * 0.8);
     if (zone.id === 'seagrass') c.lerp(grassTint, 0.28);
-    if (zone.id === 'deep') c.lerp(new THREE.Color(0x617982), 0.42);
-    if (zone.id === 'kelp') c.lerp(new THREE.Color(0x819071), 0.22);
+    if (zone.id === 'deep') c.lerp(new THREE.Color(0x4f8aa0), 0.35);
+    if (zone.id === 'kelp') c.lerp(new THREE.Color(0x7fae62), 0.22);
     if (zone.id === 'rocky') c.lerp(rockTint, 0.3 + slope * 0.5);
     else c.lerp(rockTint, slope * 0.65);
 

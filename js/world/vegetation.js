@@ -51,13 +51,13 @@ function kelpCluster(rand) {
     const h = 3.2 + rand() * 3.4;
     const x = (rand() - 0.5) * 0.6;
     const z = (rand() - 0.5) * 0.6;
-    parts.push(part(new THREE.ConeGeometry(0.1, h, 4, 2), 0x6a7a32, [x, h * 0.5, z], [0, rand(), 0]));
+    parts.push(part(new THREE.ConeGeometry(0.1, h, 4, 2), 0x8fbf3a, [x, h * 0.5, z], [0, rand(), 0]));
     const fronds = 3;
     for (let f = 0; f < fronds; f++) {
       const fy = h * (0.35 + f / fronds * 0.6);
       const g = new THREE.SphereGeometry(.55, 4, 2);
       g.scale(1, .08, .38);
-      parts.push(part(g, [0x8a9a3a, 0x74862e][f % 2],
+      parts.push(part(g, [0xb8d43a, 0x96c22e][f % 2],
         [x + 0.35, fy, z], [0.2 * (rand() - 0.5), rand() * Math.PI, 0.35]));
     }
   }
@@ -69,7 +69,7 @@ function algaeClump(rand) {
   for (let i = 0; i < 4; i++) {
     parts.push(part(
       new THREE.IcosahedronGeometry(0.3 + rand() * 0.3, 0),
-      [0x4a8a3a, 0x5f9a4a, 0x3d7a34][i % 3],
+      [0x3ad46a, 0x5be07e, 0x22b855][i % 3],
       [(rand() - 0.5) * 0.7, 0.12 + rand() * 0.2, (rand() - 0.5) * 0.7],
       [rand(), rand(), rand()],
       [1, 0.45, 1]
@@ -81,8 +81,8 @@ function algaeClump(rand) {
 function anemoneClump(rand) {
   const parts = [];
   const base = 0.22 + rand() * 0.12;
-  parts.push(part(new THREE.CylinderGeometry(base * 1.2, base * 1.6, 0.3, 6), 0xc98aa4, [0, 0.15, 0]));
-  const tips = [0xf2b6cc, 0xe89ab8, 0xffd0e0];
+  parts.push(part(new THREE.CylinderGeometry(base * 1.2, base * 1.6, 0.3, 6), 0xff6fae, [0, 0.15, 0]));
+  const tips = [0xff8fc4, 0xff5fa2, 0xffb8dc];
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + rand() * 0.4;
     const r = base * (0.4 + rand() * 0.9);
@@ -99,7 +99,7 @@ function rubbleClump(rand) {
   for (let i = 0; i < 5; i++) {
     parts.push(part(
       new THREE.DodecahedronGeometry(0.2 + rand() * 0.22, 0),
-      [0xc9b9a0, 0xb7a68e, 0xd6c7ae][i % 3],
+      [0xffdca8, 0xf5c88f, 0xfff0cf][i % 3],
       [(rand() - 0.5) * 0.7, 0.06 + rand() * 0.1, (rand() - 0.5) * 0.7],
       [rand(), rand(), rand()],
       [1, 0.6, 1]
@@ -110,7 +110,7 @@ function rubbleClump(rand) {
 
 export function createVegetation({ terrain, group, quality, rand, timeUniform }) {
   const disposables = [];
-  const scale = quality === 'low' ? 0.16 : quality === 'medium' ? 0.36 : 0.68;
+  const scale = quality === 'low' ? 0.16 : quality === 'medium' ? 0.36 : 0.7;
 
   const matrix = new THREE.Matrix4();
   const quat = new THREE.Quaternion();
@@ -154,8 +154,8 @@ export function createVegetation({ terrain, group, quality, rand, timeUniform })
 
   // Seaweed: coral gardens and rocky reef
   plant({
-    geo: bladeCluster(rand, { blades: 3, height: 2.4, width: 0.16, colors: [0x2a8a4a, 0x3aa05a, 0x1f7a40] }),
-    count: Math.round(150 * scale),
+    geo: bladeCluster(rand, { blades: 3, height: 2.4, width: 0.16, colors: [0x1fc27f, 0x35d98f, 0x14a86c] }),
+    count: Math.round(220 * scale),
     strength: 0.28,
     accept: (z) => (z === 'coral' ? 0.75 : z === 'rocky' ? 0.6 : z === 'wreck' ? 0.35 : 0.08),
     sMin: 0.7, sMax: 1.5, hue: [0.28, 0.42]
@@ -163,8 +163,8 @@ export function createVegetation({ terrain, group, quality, rand, timeUniform })
 
   // Seagrass meadow: dense short blades
   plant({
-    geo: bladeCluster(rand, { blades: 6, height: 0.8, width: 0.06, colors: [0x7aa84a, 0x8fba58, 0x6a9840], spread: 0.55 }),
-    count: Math.round(320 * scale),
+    geo: bladeCluster(rand, { blades: 6, height: 0.8, width: 0.06, colors: [0xa8e04a, 0xbdf058, 0x8ccf40], spread: 0.55 }),
+    count: Math.round(480 * scale),
     strength: 0.16,
     accept: (z) => (z === 'seagrass' ? 0.92 : z === 'shallow' ? 0.2 : 0.05),
     sMin: 0.8, sMax: 1.6, hue: [0.18, 0.26]
@@ -173,17 +173,17 @@ export function createVegetation({ terrain, group, quality, rand, timeUniform })
   // Kelp: taller, deeper water and around the wreck
   plant({
     geo: kelpCluster(rand),
-    count: Math.round(70 * scale),
+    count: Math.round(110 * scale),
     strength: 0.42,
     accept: (z) => (z === 'kelp' ? 0.95 : z === 'rocky' ? 0.5 : z === 'wreck' ? 0.7 : z === 'deep' ? 0.3 : z === 'open' ? 0.18 : 0.12),
     sMin: 0.7, sMax: 1.2, hue: [0.2, 0.28]
   });
 
   // Ribbon and curled broadleaf groves share existing placement/animation path.
-  for (const [i, colors] of [[0,[0x58ad95,0x78c4ad]], [1,[0xc6b45d,0x91b96a]], [2,[0xa594bd,0xc89fb6]]]) {
+  for (const [i, colors] of [[0,[0x32e0b8,0x62f5cc]], [1,[0xffd166,0xc8e86a]], [2,[0xb98bff,0xe0a6ff]]]) {
     plant({
       geo: bladeCluster(rand, {blades: 5, height: 1.4+i*.8, width: .18+i*.07, colors, spread: .6}),
-      count: Math.round(100*scale), strength: .12,
+      count: Math.round(150*scale), strength: .12,
       accept: z => z === 'seagrass' || z === 'rocky' || z === 'kelp' ? .8 : .15,
       sMin: .7, sMax: 1.4
     });
@@ -192,7 +192,7 @@ export function createVegetation({ terrain, group, quality, rand, timeUniform })
   // Anemones: bright soft accents tucked into reef rock and coral gardens.
   plant({
     geo: anemoneClump(rand),
-    count: Math.round(55 * scale),
+    count: Math.round(85 * scale),
     strength: 0.06,
     accept: (z) => (z === 'coral' ? 0.7 : z === 'rocky' ? 0.55 : z === 'wreck' ? 0.4 : 0.12),
     sMin: 0.7, sMax: 1.5
@@ -201,7 +201,7 @@ export function createVegetation({ terrain, group, quality, rand, timeUniform })
   // Coral rubble and shell grit where the reef breaks down into sand.
   plant({
     geo: rubbleClump(rand),
-    count: Math.round(120 * scale),
+    count: Math.round(180 * scale),
     strength: 0,
     accept: (z) => (z === 'shallow' ? 0.8 : z === 'coral' ? 0.55 : z === 'seagrass' ? 0.35 : 0.18),
     sMin: 0.6, sMax: 1.5
@@ -210,7 +210,7 @@ export function createVegetation({ terrain, group, quality, rand, timeUniform })
   // Algae clumps on rock and sand
   plant({
     geo: algaeClump(rand),
-    count: Math.round(90 * scale),
+    count: Math.round(135 * scale),
     strength: 0.05,
     accept: (z) => (z === 'rocky' ? 0.6 : z === 'deep' ? 0.35 : z === 'shallow' ? 0.35 : z === 'coral' ? 0.3 : 0.15),
     sMin: 0.6, sMax: 1.5, hue: [0.22, 0.36]

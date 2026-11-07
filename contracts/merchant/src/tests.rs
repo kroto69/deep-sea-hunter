@@ -1,0 +1,84 @@
+use super::*;
+use near_sdk::test_utils::{accounts, VMContextBuilder};
+use near_sdk::{testing_env, PromiseResult};
+const STORAGE: u128 = 10u128.pow(25);
+fn ctx(who: AccountId, deposit: u128) { let mut b=VMContextBuilder::new(); b.current_account_id(accounts(5)).predecessor_account_id(who.clone()).signer_account_id(who).attached_deposit(NearToken::from_yoctonear(deposit)).account_balance(NearToken::from_near(100)); testing_env!(b.build()); }
+fn build() -> Contract { ctx(accounts(0),1); Contract::new(accounts(0),accounts(1),accounts(2),U128(100),"Deepfish Credits".into(),"DFC".into()) }
+fn setup() -> Contract { let mut c=build(); for a in [accounts(0),accounts(1),accounts(2),accounts(3),accounts(4)] {ctx(a,STORAGE); c.storage_deposit(None, None);} ctx(accounts(0),500); c.fund_treasury(); ctx(accounts(0),1); c.mint_asset("fish-000001".into(),accounts(3),"clownfish".into(),"Clownfish".into()); c }
+const TID: &str = "fish:fish-000001";
+
+// ---- existing merchant behaviour (adapted: assets now NEP-245 tokens) ----
+#[test] fn merchant_purchase_transfers_asset_and_credits_native_proceeds(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(75),u64::MAX);ctx(accounts(3),1);c.accept_purchase_order("order-1".into(),U128(1));assert_eq!(c.mt_balance_of(accounts(1),TID.into()).0,1);assert_eq!(c.mt_balance_of(accounts(3),TID.into()).0,0);assert_eq!(c.seller_claim(accounts(3)).0,75);assert_eq!(c.reserved_orders().0,0);assert!(c.accounting_invariant());}
+#[test] #[should_panic(expected="Owner only")] fn funding_restricted(){let mut c=setup();ctx(accounts(3),500);c.fund_treasury();}
+#[test] #[should_panic(expected="Trade limit exceeded")] fn purchase_limit(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(101),u64::MAX);}
+#[test] #[should_panic(expected="Insufficient treasury funds")] fn treasury_cannot_over_reserve(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1000),U128(1),u64::MAX);}
+#[test] #[should_panic(expected="Insufficient token balance")] fn seller_cannot_accept_without_owning_asset(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(75),u64::MAX);ctx(accounts(4),1);c.accept_purchase_order("order-1".into(),U128(1));}
+#[test] #[should_panic(expected="Token already minted")] fn duplicate_asset_mint(){let mut c=setup();ctx(accounts(0),1);c.mint_asset("fish-000001".into(),accounts(3),"clownfish".into(),"Clownfish".into());}
+#[test] #[should_panic(expected="Insufficient token balance")] fn unauthorized_asset_transfer(){let mut c=setup();ctx(accounts(4),1);c.mt_transfer(accounts(3),TID.into(),U128(1),None,None);}
+#[test] #[should_panic(expected="Already registered")] fn duplicate_registration(){let mut c=setup();ctx(accounts(3),STORAGE);c.register();}
+#[test] #[should_panic(expected="Player not registered")] fn mint_requires_registered_owner(){let mut c=setup();ctx(accounts(0),1);c.mint_asset("fish-000002".into(),"unregistered.testnet".parse::<AccountId>().unwrap(),"grouper".into(),"Grouper".into());}
+#[test] #[should_panic(expected="Owner only")] fn trade_limit_admin_only(){let mut c=setup();ctx(accounts(3),1);c.set_max_trade(U128(1000));}
+#[test] #[should_panic(expected="Token receiver not registered")] fn asset_cannot_be_transferred_to_unregistered_account(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer("stranger.testnet".parse::<AccountId>().unwrap(),TID.into(),U128(1),None,None);}
+#[test] #[should_panic(expected="Treasury credits only through purchase")] fn treasury_cannot_receive_normal_ft_transfer(){let mut c=setup();ctx(accounts(3),1);c.ft_transfer(accounts(2),U128(1),None);}
+#[test] #[should_panic(expected="Order inactive or expired")] fn duplicate_purchase_rejected(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(75),u64::MAX);ctx(accounts(3),1);c.accept_purchase_order("order-1".into(),U128(1));ctx(accounts(3),1);c.accept_purchase_order("order-1".into(),U128(1));}
+
+// ---- NEP-245 core ----
+#[test] fn mt_mint_sets_supply_balance_and_event(){let c=setup();assert_eq!(c.mt_supply(TID.into()),Some(U128(1)));assert_eq!(c.mt_balance_of(accounts(3),TID.into()).0,1);assert_eq!(c.mt_batch_balance_of(accounts(3),vec![TID.into(),"fish:missing-1".into()]),vec![U128(1),U128(0)]);assert_eq!(c.mt_batch_supply(vec![TID.into(),"fish:missing-1".into()]),vec![Some(U128(1)),None]);}
+#[test] fn mt_transfer_moves_balance(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),TID.into(),U128(1),None,Some("gift".into()));assert_eq!(c.mt_balance_of(accounts(4),TID.into()).0,1);assert_eq!(c.mt_balance_of(accounts(3),TID.into()).0,0);assert_eq!(c.mt_supply(TID.into()),Some(U128(1)));}
+#[test] #[should_panic(expected="Insufficient token balance")] fn mt_transfer_insufficient_balance(){let mut c=setup();ctx(accounts(4),1);c.mt_transfer(accounts(3),TID.into(),U128(1),None,None);}
+#[test] #[should_panic(expected="Token not found")] fn mt_transfer_invalid_token_id(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),"not-a-token".into(),U128(1),None,None);}
+#[test] #[should_panic(expected="Requires attached deposit of exactly 1 yoctoNEAR")] fn mt_transfer_requires_one_yocto(){let mut c=setup();ctx(accounts(3),0);c.mt_transfer(accounts(4),TID.into(),U128(1),None,None);}
+#[test] #[should_panic(expected="Mismatched token_ids and amounts")] fn mt_batch_transfer_length_mismatch(){let mut c=setup();ctx(accounts(3),1);c.mt_batch_transfer(accounts(4),vec![TID.into()],vec![],None,None);}
+#[test] fn mt_batch_transfer_moves_multiple_tokens(){let mut c=setup();ctx(accounts(0),1);c.mint_asset("fish-000002".into(),accounts(3),"grouper".into(),"Grouper".into());ctx(accounts(3),1);c.mt_batch_transfer(accounts(4),vec![TID.into(),"fish:fish-000002".into()],vec![U128(1),U128(1)],None,None);assert_eq!(c.mt_batch_balance_of(accounts(4),vec![TID.into(),"fish:fish-000002".into()]),vec![U128(1),U128(1)]);}
+#[test] fn mt_transfer_call_initiates_promise(){let mut c=setup();ctx(accounts(3),1);let _=c.mt_transfer_call(accounts(4),TID.into(),U128(1),None,None,"{}".into());assert_eq!(c.mt_balance_of(accounts(4),TID.into()).0,1);}
+#[test] fn mt_transfer_call_requires_one_yocto(){let mut c=setup();ctx(accounts(3),0);assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(||c.mt_transfer_call(accounts(4),TID.into(),U128(1),None,None,"{}".into()))).is_err());}
+#[test] fn mt_resolve_transfer_keeps_used_tokens(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),TID.into(),U128(1),None,None);let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5)).attached_deposit(NearToken::from_yoctonear(1));testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), std::collections::HashMap::new(), vec![PromiseResult::Successful(serde_json::to_vec(&vec![U128(0)]).unwrap())]);let used=c.mt_resolve_transfer(accounts(3),accounts(4),vec![TID.into()],vec![U128(1)],None);assert_eq!(used,vec![U128(1)]);assert_eq!(c.mt_balance_of(accounts(4),TID.into()).0,1);}
+#[test] fn mt_resolve_transfer_returns_unused_tokens(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),TID.into(),U128(1),None,None);let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5));testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), std::collections::HashMap::new(), vec![PromiseResult::Successful(serde_json::to_vec(&vec![U128(1)]).unwrap())]);let used=c.mt_resolve_transfer(accounts(3),accounts(4),vec![TID.into()],vec![U128(1)],None);assert_eq!(used,vec![U128(0)]);assert_eq!(c.mt_balance_of(accounts(3),TID.into()).0,1);assert_eq!(c.mt_balance_of(accounts(4),TID.into()).0,0);}
+#[test] fn mt_resolve_transfer_reverts_on_receiver_failure(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),TID.into(),U128(1),None,None);let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5));testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), std::collections::HashMap::new(), vec![PromiseResult::Failed]);c.mt_resolve_transfer(accounts(3),accounts(4),vec![TID.into()],vec![U128(1)],None);assert_eq!(c.mt_balance_of(accounts(3),TID.into()).0,1);}
+#[test] #[should_panic(expected="Mismatched unused amounts")] fn mt_resolve_rejects_wrong_unused_array_length(){let mut c=setup();let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5));testing_env!(b.build(),near_sdk::test_vm_config(),near_sdk::RuntimeFeesConfig::test(),std::collections::HashMap::new(),vec![PromiseResult::Successful(serde_json::to_vec(&Vec::<U128>::new()).unwrap())]);c.mt_resolve_transfer(accounts(3),accounts(4),vec![TID.into()],vec![U128(1)],None);}
+#[test] #[should_panic(expected="Expected one promise result")] fn mt_resolve_transfer_rejects_external_call(){let mut c=setup();ctx(accounts(3),1);c.mt_resolve_transfer(accounts(3),accounts(4),vec![TID.into()],vec![U128(1)],None);}
+
+// ---- metadata / enumeration ----
+#[test] fn mt_metadata_contract_reports_spec(){assert_eq!(build().mt_metadata_contract().spec,"mt-1.0.0");}
+#[test] fn mt_metadata_views(){let c=setup();assert_eq!(c.mt_metadata_token_all(vec![TID.into()])[0].as_ref().unwrap().base.id,"fish");assert_eq!(c.mt_metadata_token_by_token_id(vec![TID.into()])[0].as_ref().unwrap().title.as_deref(),Some("Clownfish"));assert_eq!(c.mt_metadata_base_by_token_id(vec![TID.into()])[0].as_ref().unwrap().name,"fish");assert_eq!(c.mt_metadata_base_by_metadata_id(vec!["fish".into()])[0].as_ref().unwrap().id,"fish");assert!(c.mt_metadata_token_by_token_id(vec!["fish:nope".into()])[0].is_none());}
+#[test] fn mt_enumeration_lists_tokens(){let c=setup();assert_eq!(c.mt_tokens(None,None).len(),1);let owned=c.mt_tokens_for_owner(accounts(3),None,None);assert_eq!(owned[0].owner_id,Some(accounts(3)));assert_eq!(owned[0].base_metadata_id,"fish");assert!(c.mt_tokens_for_owner(accounts(4),None,None).is_empty());assert_eq!(c.mt_tokens_base_metadata_all(None,None)[0].id,"fish");}
+
+// ---- storage management ----
+#[test] fn storage_bounds_and_registration(){let mut c=build();let bounds=c.storage_balance_bounds();assert!(bounds.min.as_yoctonear()>0);assert!(c.storage_balance_of(accounts(4)).is_none());ctx(accounts(4),bounds.min.as_yoctonear());let bal=c.storage_deposit(Some(accounts(4)),None);assert_eq!(bal.total,bounds.min);assert_eq!(bal.available,NearToken::from_yoctonear(0));assert!(c.storage_balance_of(accounts(4)).is_some());}
+#[test] fn storage_deposit_refunds_excess(){let mut c=build();let min=c.storage_balance_bounds().min.as_yoctonear();ctx(accounts(4),min+5);c.storage_deposit(None,None);assert_eq!(c.storage_balance_of(accounts(4)).unwrap().total.as_yoctonear(),min+5);}
+#[test] #[should_panic(expected="Insufficient storage deposit")] fn storage_deposit_below_minimum(){let mut c=build();ctx(accounts(4),1);c.storage_deposit(None,None);}
+#[test] fn storage_withdraw_reports_available(){let mut c=build();let min=c.storage_balance_bounds().min.as_yoctonear();ctx(accounts(4),min);c.storage_deposit(None,None);ctx(accounts(4),1);assert_eq!(c.storage_withdraw(None).available,NearToken::from_yoctonear(0));}
+#[test] fn storage_unregister_releases_account(){let mut c=build();let min=c.storage_balance_bounds().min.as_yoctonear();ctx(accounts(4),min);c.storage_deposit(None,None);ctx(accounts(4),1);assert!(c.storage_unregister(Some(true)));assert!(c.storage_balance_of(accounts(4)).is_none());}
+#[test] #[should_panic(expected="Account has token balances")] fn storage_unregister_rejected_with_balance(){let mut c=setup();ctx(accounts(3),1);c.storage_unregister(Some(true));}
+
+// ---- events ----
+#[test] fn mt_events_follow_nep245_shape(){let mut c=setup();ctx(accounts(3),1);c.mt_transfer(accounts(4),TID.into(),U128(1),None,None);let logs=near_sdk::test_utils::get_logs();let event:serde_json::Value=serde_json::from_str(logs.last().unwrap().strip_prefix("EVENT_JSON:").unwrap()).unwrap();assert_eq!(event["standard"],"nep245");assert_eq!(event["event"],"mt_transfer");assert_eq!(event["data"][0]["token_ids"][0],TID);}
+
+#[test] fn proceeds_withdrawal_failure_restores_claim(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(75),u64::MAX);ctx(accounts(3),1);c.accept_purchase_order("order-1".into(),U128(1));ctx(accounts(3),1);let _=c.withdraw_proceeds();let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5));testing_env!(b.build(),near_sdk::test_vm_config(),near_sdk::RuntimeFeesConfig::test(),std::collections::HashMap::new(),vec![PromiseResult::Failed]);assert!(!c.resolve_withdrawal(accounts(3),U128(75)));assert_eq!(c.seller_claim(accounts(3)).0,75);assert!(c.accounting_invariant());}
+
+#[test] fn proceeds_withdrawal_success_updates_paid_out(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("order-1".into(),TID.into(),U128(1),U128(75),u64::MAX);ctx(accounts(3),1);c.accept_purchase_order("order-1".into(),U128(1));ctx(accounts(3),1);let _=c.withdraw_proceeds();let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(5));testing_env!(b.build(),near_sdk::test_vm_config(),near_sdk::RuntimeFeesConfig::test(),std::collections::HashMap::new(),vec![PromiseResult::Successful(vec![])]);assert!(c.resolve_withdrawal(accounts(3),U128(75)));assert_eq!(c.paid_out().0,75);assert!(c.accounting_invariant());}
+
+#[test] fn serialized_metadata_json_abi(){let c=setup();let json=serde_json::to_value(c.mt_metadata_contract()).unwrap();assert_eq!(json["spec"],"mt-1.0.0");let token=serde_json::to_value(&c.mt_metadata_token_all(vec![TID.into()])[0]).unwrap();assert!(token["base"]["id"].is_string());}
+
+#[test] fn expired_order_rejected(){let mut c=setup();ctx(accounts(0),1);c.create_purchase_order("expired".into(),TID.into(),U128(1),U128(10),1);let mut b=VMContextBuilder::new();b.current_account_id(accounts(5)).predecessor_account_id(accounts(3)).block_timestamp(2_000_000);testing_env!(b.build());assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(||c.accept_purchase_order("expired".into(),U128(1)))).is_err());}
+
+
+// Transfer to merchant: supply unchanged, sender's emptied entry refunds sender, receiver pays its new entry.
+#[test] fn mt_transfer_to_merchant_charges_receiver_and_refunds_sender(){
+ let mut c=setup();
+ let used=|c:&Contract,a:AccountId|c.mt_registered.get(&a).unwrap_or(0);
+ let (player_before,merchant_before)=(used(&c,accounts(3)),used(&c,accounts(1)));
+ assert!(player_before>0);
+ ctx(accounts(3),1); c.mt_transfer(accounts(1),TID.into(),U128(1),None,None);
+ assert_eq!(c.mt_balance_of(accounts(1),TID.into()).0,1);
+ assert_eq!(c.mt_balance_of(accounts(3),TID.into()).0,0);
+ assert_eq!(c.mt_supply(TID.into()),Some(U128(1)));
+ assert_eq!(used(&c,accounts(3)),0,"player storage refunded");
+ assert!(used(&c,accounts(1))>merchant_before,"merchant pays new entry");
+}
+// Receiver with only the registration minimum cannot be given a new balance entry.
+#[test] #[should_panic(expected="Insufficient storage balance")] fn mt_transfer_rejects_receiver_without_storage(){
+ let mut c=setup(); let min=c.storage_balance_bounds().min.as_yoctonear();
+ let r:AccountId="minimum.testnet".parse().unwrap(); ctx(r,min); c.register();
+ ctx(accounts(3),1); c.mt_transfer("minimum.testnet".parse().unwrap(),TID.into(),U128(1),None,None);
+}

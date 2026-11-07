@@ -1,4 +1,5 @@
 import { FISH_PRICES, ZONES, UPGRADES, MISSIONS } from './progression.js';
+import { simulateSevenDays } from './fast-forward.js';
 
 // Boat stations reuse saved progression; no new economy state.
 export class Hub {
@@ -20,6 +21,7 @@ export class Hub {
     document.getElementById('hub-wallet').addEventListener('click', () => this.online?.walletLogin?.open());
     this.body.addEventListener('click', (e) => this._onAction(e));
     this.body.addEventListener('click', e => { if (e.target.closest('[data-action="tutorial"]')) window.dispatchEvent(new Event('dsh-tutorial-open')); });
+    this.body.addEventListener('click', e => { if (e.target.closest('[data-action="fast-forward"]')) this.fastForward(); });
     this.root.addEventListener('keydown', e => {
       if (e.key !== 'Tab') return;
       const buttons = [...this.root.querySelectorAll('button:not(:disabled):not(.hidden)')];
@@ -96,7 +98,11 @@ export class Hub {
     const inv = p.data.inventory;
     const invCount = Object.values(inv).reduce((a, b) => a + b, 0);
     let html = '';
-    if (this.tab === 'market') {
+    if (this.tab === 'economy') {
+      html += '<div class="hub-station"><span>ON-CHAIN ECONOMY · NEAR TESTNET</span><b>DISABLED</b></div>';
+      html += '<p class="hub-note">No verified merchant contract configured. Treasury, asset balances, prices and confirmed purchases unavailable. Offline fish and credits are not blockchain assets.</p>';
+      html += '<div class="hub-row"><b>Merchant treasury / inventory</b><span>Unavailable</span></div><div class="hub-row"><b>Your NEP-245 assets</b><span>Connect feature unavailable</span></div><div class="hub-row"><b>Confirmed transactions</b><span>None verified</span></div>';
+    } else if (this.tab === 'market') {
       const rows = Object.entries(inv).filter(([, n]) => n > 0);
       const total = Math.round(rows.reduce((s, [id, n]) => s + (FISH_PRICES[id] || 20) * n, 0) * (1 + p.upgradeLevel('sales') * 0.15));
       html += `<div class="hub-station"><span>FISH MARKET</span><b>${p.cash} CR</b></div>`;
@@ -118,18 +124,6 @@ export class Hub {
             : `<button class="hub-btn" data-action="upgrade" data-id="${u.id}">${cost} CR</button>`}
         </div>`;
       }
-    } else if (this.tab === 'workshop') {
-      html += '<div class="hub-station"><span>WORKSHOP</span><b>LOADOUT</b></div>';
-      html += `<div class="hub-row"><div><b>Speargun · equipped</b><br><span class="hub-dim">Loader Lv ${p.upgradeLevel('reload')}/2 · automatic ammo</span></div></div>`;
-      html += `<div class="hub-row"><div><b>Oxygen tank · equipped</b><br><span class="hub-dim">Lv ${p.upgradeLevel('oxygen')}/3 · capacity ${p.oxygenCapacity()}</span></div></div>`;
-      html += `<div class="hub-row"><div><b>Dive light · equipped</b><br><span class="hub-dim">Lv ${p.upgradeLevel('light')}/2</span></div></div>`;
-      for (const u of UPGRADES.filter(u => u.id !== 'sales')) {
-        const lvl = p.upgradeLevel(u.id);
-        html += `<div class="hub-row"><div><b>${u.name}</b><br><span class="hub-dim">Lv ${lvl}/${u.max} · ${u.desc}</span></div>${lvl < u.max ? `<button class="hub-btn" data-action="upgrade" data-id="${u.id}">UPGRADE · ${u.cost[lvl]} CR</button>` : '<span class="hub-tag">MAX</span>'}</div>`;
-      }
-      html += '<p class="hub-note">Single loadout in existing game; no alternative gear to select.</p>';
-    } else if (this.tab === 'collectibles') {
-      html += '<div class="hub-station"><span>COLLECTIBLES</span><b>TESTNET</b></div><p class="hub-note">NFT collectibles are separate from ordinary fish and credits.</p><button class="hub-btn wide" data-action="collectibles">OPEN COLLECTIBLES</button>';
     } else if (this.tab === 'storage') {
       const rows = Object.entries(inv).filter(([, n]) => n > 0);
       html += rows.length
@@ -149,17 +143,6 @@ export class Hub {
             : `<button class="hub-btn" data-action="claim" data-id="${m.id}" ${p.missionDone(m) ? '' : 'disabled'}>CLAIM</button>`}
         </div>`;
       }
-    } else if (this.tab === 'zones') {
-      html += '<div class="hub-station"><span>DIVE PREPARATION</span><b>CHART TABLE</b></div>';
-      for (const z of ZONES) {
-        const unlocked = p.data.zones.includes(z.id);
-        html += `<div class="hub-row">
-          <div><b>${z.name}</b><br><span class="hub-dim">${z.cost ? `${z.cost} CR to unlock` : 'Included'} · ${z.id === 'reef' ? 'Shallow reef' : z.id === 'wreck' ? 'Sunken hull' : z.id === 'kelp' ? 'Kelp canopy' : 'Deep water'}</span></div>
-          ${unlocked
-            ? `<button class="hub-btn" data-action="dive" data-id="${z.id}">DIVE</button>`
-            : `<button class="hub-btn" data-action="unlock" data-id="${z.id}">UNLOCK</button>`}
-        </div>`;
-      }
     } else if (this.tab === 'records') {
       const records = Object.entries(p.data.records);
       html += records.length
@@ -174,7 +157,34 @@ export class Hub {
         ? `<div class="hub-note">Rare finds: ${rare.join(', ')}</div>`
         : `<div class="hub-note">No rare specimens yet.</div>`;
     }
+    if (this.tab === 'market') html += '<button class="hub-btn" data-action="fast-forward">FAST FORWARD · 7 SIMULATED DAYS</button>';
     html += `<div class="hub-note">Fish in storage: ${invCount} · Debris cleaned: ${p.stats.debris} · Animals freed: ${p.stats.freed}</div><button class="hub-btn" data-action="tutorial">HOW TO PLAY</button>`;
     this.body.innerHTML = html;
+    if (this.simulation) this.renderSimulation();
+  }
+
+  fastForward() {
+    clearInterval(this.fastForwardTimer);
+    const inv = this.progression.data.inventory;
+    const demand = Object.fromEntries(Object.keys(FISH_PRICES).map(id => [id, Math.max(1, Math.round((FISH_PRICES[id] || 20) / 10))]));
+    this.simulation = simulateSevenDays({ inventory: inv, treasury: this.progression.cash, demand });
+    this.simulationDay = 0;
+    this.renderSimulation();
+    this.fastForwardStarted = Date.now();
+    this.fastForwardTimer = setInterval(() => {
+      this.simulationDay = Math.min(7, Math.floor((Date.now() - this.fastForwardStarted) / (60_000 / 7)));
+      this.renderSimulation();
+      if (this.simulationDay === 7) clearInterval(this.fastForwardTimer);
+    }, 1000);
+  }
+
+  renderSimulation() {
+    this.body.querySelector('.hub-simulation')?.remove();
+    const day = this.simulationDay || 0;
+    const node = document.createElement('section');
+    node.className = 'hub-simulation';
+    node.setAttribute('aria-live', 'polite');
+    node.innerHTML = `<h3>LOCAL SIMULATION · NOT ON-CHAIN</h3><p>7 days / 60 seconds · day ${day}/7 · treasury ${this.simulation.before.treasury} → ${this.simulation.after.treasury} CR</p><ol>${this.simulation.days.slice(0, day).map(d=>`<li><b>Day ${d.day}</b> · treasury ${d.treasury} CR${d.events.map(e=>`<br>${e.species}: supplied ${e.supplied}, bought ${e.bought}; stock ${e.stockBefore}→${e.stockAfter}; demand ${e.demandBefore}→${e.demandAfter}; price ${e.priceBefore}→${e.price} CR · ${e.reason}`).join('')}</li>`).join('')}</ol>`;
+    this.body.append(node);
   }
 }

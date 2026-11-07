@@ -42,9 +42,10 @@ test('hunting HTTP and PostgreSQL invariants', { skip: !process.env.TEST_DATABAS
     await assert.rejects(db.query('INSERT INTO inventory_receipts(receipt_id,player_id,species_id) VALUES($1,$2,$3)', [receipt.id, a.player.id, 'clownfish']), e => e.code === '23505');
     assert.equal((await db.query('SELECT count(*)::int n FROM population_events WHERE receipt_id=$1', [receipt.id])).rows[0].n, 1);
   });
-  await t.test('equipment species cooldown budget and expiration', async () => {
+  await t.test('demo catches every fish regardless of equipment; cooldown budget and expiration still apply', async () => {
     assert.equal((await shot(a, h1, 'unknown01', 'missing')).json().error, 'species_unavailable');
-    assert.equal((await shot(a, h1, 'level0001', 'bluetang')).json().error, 'equipment_insufficient');
+    await cooldown(a);
+    assert.equal((await shot(a, h1, 'level0001', 'bluetang')).statusCode, 201);
     assert.equal((await shot(a, h1, 'tooquick1')).json().error, 'shot_rate_limited');
     const other = await hunt(a); assert.equal((await shot(a, other, 'newhunt01')).json().error, 'shot_rate_limited');
     await db.query('UPDATE catch_sessions SET shots_used=max_shots WHERE id=$1', [other]);
@@ -59,9 +60,9 @@ test('hunting HTTP and PostgreSQL invariants', { skip: !process.env.TEST_DATABAS
     try {
       const response = await shot(a, h1, 'rollback1'); assert.equal(response.statusCode, 500); assert.equal(response.json().error, 'internal_error');
       assert.equal((await db.query("SELECT population_count FROM populations WHERE species_id='clownfish'")).rows[0].population_count, 29);
-      assert.equal((await db.query('SELECT count(*)::int n FROM catch_receipts')).rows[0].n, 1);
-      assert.equal((await db.query('SELECT count(*)::int n FROM shot_nonces')).rows[0].n, 1);
-      assert.equal((await req(a, 'GET', `/api/hunts/${h1}`)).json().shotsUsed, 1);
+      assert.equal((await db.query('SELECT count(*)::int n FROM catch_receipts')).rows[0].n, 2);
+      assert.equal((await db.query('SELECT count(*)::int n FROM shot_nonces')).rows[0].n, 2);
+      assert.equal((await req(a, 'GET', `/api/hunts/${h1}`)).json().shotsUsed, 2);
     } finally { await db.query('DROP TRIGGER fail_inventory ON player_inventory; DROP FUNCTION fail_inventory()'); }
   });
   await t.test('concurrent last fish never overshoots and failed key remains retryable', async () => {
@@ -70,8 +71,8 @@ test('hunting HTTP and PostgreSQL invariants', { skip: !process.env.TEST_DATABAS
     assert.deepEqual(results.map(r => r.statusCode).sort(), [201, 409]);
     assert.equal(results.find(r => r.statusCode === 409).json().error, 'population_depleted');
     assert.equal((await db.query("SELECT population_count FROM populations WHERE species_id='clownfish'")).rows[0].population_count, 0);
-    assert.equal((await db.query('SELECT sum(quantity)::int n FROM player_inventory')).rows[0].n, 2);
-    assert.equal((await db.query('SELECT count(*)::int n FROM catch_receipts')).rows[0].n, 2);
+    assert.equal((await db.query('SELECT sum(quantity)::int n FROM player_inventory')).rows[0].n, 3);
+    assert.equal((await db.query('SELECT count(*)::int n FROM catch_receipts')).rows[0].n, 3);
   });
   await t.test('player-scoped replay remains blocked across hunts', async () => {
     const other=await hunt(a);

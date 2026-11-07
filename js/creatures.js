@@ -201,9 +201,9 @@ export function createCreatures({ group, world, player, quality, rand: seededRan
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     group.add(mesh);
   }
-  scatterStatic(geos.starfish, Math.round(10 * scale), z => z === 'shallow' || z === 'seagrass' || z === 'coral');
-  scatterStatic(geos.urchin, Math.round(12 * scale), z => z === 'rocky' || z === 'coral');
-  scatterStatic(geos.clam, Math.round(14 * scale), z => z === 'shallow' || z === 'coral' || z === 'seagrass');
+  scatterStatic(geos.starfish, Math.round(28 * scale), z => z === 'shallow' || z === 'seagrass' || z === 'coral');
+  scatterStatic(geos.urchin, Math.round(36 * scale), z => z === 'rocky' || z === 'coral');
+  scatterStatic(geos.clam, Math.round(44 * scale), z => z === 'shallow' || z === 'coral' || z === 'seagrass');
 
   function addEntity(kind, geo, opts, zones, hover, initialScale = 1) {
     const mesh = new THREE.Mesh(geo, sharedMat);
