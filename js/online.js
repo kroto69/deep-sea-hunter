@@ -176,14 +176,17 @@ export class OnlineGame {
         if(!await walletAccount())await wallet.signIn({contractId:config.merchantContractId});
         this.walletId=await walletAccount();if(!this.walletId)throw new Error('Testnet wallet account not connected');
         window.dispatchEvent(new Event('dsh-wallet-change'));
+        // Wallet connected: enter online automatically, then ask once to
+        // bind the wallet to the server (sign message, no gas). Without
+        // the binding, catches never mint and the MARKET sell stays
+        // off-chain CR — the exact confusion this fixes. A decline is not
+        // fatal: the NEAR tab VERIFY WALLET button retries any time.
+        if(!this.active)await this.connect();
+        this.walletId=await walletAccount();
+        await this.refresh();
+        if(!this.profile?.wallet_account)await this.verifyWalletOnce();
       }
-      if(action==='verify'){
-        const wallet=await this.wallet();this.walletId=await walletAccount();if(!this.walletId)throw new Error('Connect Testnet wallet first');
-        const challenge=await this.post('/api/wallet/challenge');sessionStorage.setItem('dsh.wallet.challenge',JSON.stringify(challenge));
-        const {Buffer}=await import('https://esm.sh/buffer@6.0.3');
-        const signed=await wallet.signMessage({message:challenge.message,recipient:challenge.recipient,nonce:Buffer.from(challenge.nonce,'base64'),callbackUrl:challenge.callbackUrl,state:challenge.id});
-        if(signed){if(signed.accountId!==this.walletId)throw new Error('Wallet account changed during verification');await this.post('/api/wallet/verify',{challengeId:challenge.id,accountId:signed.accountId,publicKey:signed.publicKey,signature:signed.signature});sessionStorage.removeItem('dsh.wallet.challenge');await this.refresh();window.dispatchEvent(new Event('dsh-session-change'));}
-      }
+      if(action==='verify')await this.verifyWallet();
       if(action==='disconnect'){await (await this.wallet()).signOut();this.walletId=null;window.dispatchEvent(new Event('dsh-wallet-change'));this.hud.notify('WALLET DISCONNECTED · SERVER BINDING RETAINED');}
       if(action==='collectibles'){location.href='collectibles.html';}
       if(action==='shop-refresh'){this.hud.notify('SYNCING NEAR TESTNET…');await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);if(this.onchain.lastTx?.hash)await this.verifyMerchantTx(this.onchain.lastTx.hash);this.hud.notify('NEAR TESTNET SYNCED');}
@@ -212,6 +215,23 @@ export class OnlineGame {
       if(action==='shop-refresh'){await this.loadShops();await this.refresh();}
     }catch(error){this.showError(error);return false;}finally{this.busy=false;this.render();}
     return true;
+  }
+  // Bind the connected wallet to the server (sign message, no gas).
+  async verifyWallet(){
+    const wallet=await this.wallet();this.walletId=await walletAccount();if(!this.walletId)throw new Error('Connect Testnet wallet first');
+    const challenge=await this.post('/api/wallet/challenge');sessionStorage.setItem('dsh.wallet.challenge',JSON.stringify(challenge));
+    const {Buffer}=await import('https://esm.sh/buffer@6.0.3');
+    const signed=await wallet.signMessage({message:challenge.message,recipient:challenge.recipient,nonce:Buffer.from(challenge.nonce,'base64'),callbackUrl:challenge.callbackUrl,state:challenge.id});
+    if(signed){if(signed.accountId!==this.walletId)throw new Error('Wallet account changed during verification');await this.post('/api/wallet/verify',{challengeId:challenge.id,accountId:signed.accountId,publicKey:signed.publicKey,signature:signed.signature});sessionStorage.removeItem('dsh.wallet.challenge');await this.refresh();window.dispatchEvent(new Event('dsh-session-change'));}
+  }
+  // Automatic prompt after a wallet connect: once per browser session.
+  // A decline or failure is not fatal — the NEAR tab VERIFY WALLET
+  // button retries any time.
+  async verifyWalletOnce(){
+    if(sessionStorage.getItem('dsh.verify.prompted'))return false;
+    sessionStorage.setItem('dsh.verify.prompted','1');
+    try{await this.verifyWallet();this.hud.notify('WALLET VERIFIED · AUTO-MINT ON');return true;}
+    catch(error){this.showError(error);return false;}
   }
   // Wallet connected = chain state loads by itself; no manual SYNC needed.
   autoSync(){
@@ -263,9 +283,9 @@ export class OnlineGame {
     const needed=bankrupt?reopenAmountNeeded({availableBalance:Number(merchant.available_balance||0),reserveFloor:Number(merchant.reserve_floor||1000)}):0;
     const merchantBadge=`<span class="merchant-status ${bankrupt?'is-bankrupt':merchant?.enabled?'':'is-paused'}">${bankrupt?'CLOSED · BANKRUPT':merchant?.enabled?'BUYING':'PAUSED'}</span>`;
     const investBox=bankrupt?`<div class="market-bankrupt"><p>Dock Merchant went broke: treasury ${esc(merchant.available_balance)} CR is at or below its ${esc(merchant.reserve_floor)} CR reserve floor, so the shop is closed and buys nothing until someone invests.</p><div class="hub-quick">${button('invest',`INVEST ${needed} CR TO REOPEN`,String(needed))}${button('invest','INVEST 1000 CR','1000')}</div><p class="hub-note">Invested CR goes straight into the merchant treasury. Reopening needs ${esc(needed)} CR; any extra stays as treasury. Players have invested ${esc(merchant.invested_total??0)} CR in total.</p></div>`:'';
-    const orderRows=orders.length?orders.map(o=>{const owned=available(o.species_id), remaining=Number(o.quantity), need=Number(o.needed), progress=Number(o.stock)/Math.max(1,Number(o.desired_quantity));return `<div class="market-row ${o.status==='fulfilled'?'is-complete':need<=2&&o.status==='open'?'is-near':''}" title="Merchant price reasoning: ${esc(reasoning(o))}">${icon(o.species_id)}<div class="market-species"><b>${esc(o.name)}</b><small>${esc(o.stock)} / ${esc(o.desired_quantity)} stocked · ${esc(need)} needed · <abbr title="${esc(reasoning(o))}">WHY THIS PRICE?</abbr></small><span class="market-progress" role="progressbar" aria-label="${esc(o.name)} stock" aria-valuenow="${esc(o.stock)}" aria-valuemin="0" aria-valuemax="${esc(o.desired_quantity)}"><i style="width:${Math.min(100,Math.max(0,progress*100))}%"></i></span></div><div class="market-price"><b>${offer(o)?`${esc(o.unit_price)} CR`:'—'}</b><small>${offer(o)?`${esc(remaining)} left · up to ${esc(remaining*Number(o.unit_price))} CR`:esc(o.status)}</small></div>${offer(o)&&owned.length?button('sell','SELL',owned[0].id):`<span class="order-state">${o.status==='fulfilled'?'COMPLETE':offer(o)?'NO CATCH':esc(o.status).toUpperCase()}</span>`}</div>`;}).join(''):'<p class="market-empty">No orders available. Sync to check merchant demand.</p>';
+    const orderRows=orders.length?orders.map(o=>{const owned=available(o.species_id), sellable=owned.filter(r=>!r.token_id), remaining=Number(o.quantity), need=Number(o.needed), progress=Number(o.stock)/Math.max(1,Number(o.desired_quantity));return `<div class="market-row ${o.status==='fulfilled'?'is-complete':need<=2&&o.status==='open'?'is-near':''}" title="Merchant price reasoning: ${esc(reasoning(o))}">${icon(o.species_id)}<div class="market-species"><b>${esc(o.name)}</b><small>${esc(o.stock)} / ${esc(o.desired_quantity)} stocked · ${esc(need)} needed · <abbr title="${esc(reasoning(o))}">WHY THIS PRICE?</abbr></small><span class="market-progress" role="progressbar" aria-label="${esc(o.name)} stock" aria-valuenow="${esc(o.stock)}" aria-valuemin="0" aria-valuemax="${esc(o.desired_quantity)}"><i style="width:${Math.min(100,Math.max(0,progress*100))}%"></i></span></div><div class="market-price"><b>${offer(o)?`${esc(o.unit_price)} CR`:'—'}</b><small>${offer(o)?`${esc(remaining)} left · up to ${esc(remaining*Number(o.unit_price))} CR`:esc(o.status)}</small></div>${offer(o)&&sellable.length?button('sell','SELL FOR CR · OFF-CHAIN',sellable[0].id):`<span class="order-state">${o.status==='fulfilled'?'COMPLETE':offer(o)?(owned.length?'ON-CHAIN':'NO CATCH'):esc(o.status).toUpperCase()}</span>`}</div>`;}).join(''):'<p class="market-empty">No orders available. Sync to check merchant demand.</p>';
     const held=new Map();for(const r of receipts){const group=held.get(r.species_id)||[];group.push(r);held.set(r.species_id,group);}
-    const inventoryRows=held.size?[...held].map(([id,group])=>{const o=orderFor(id), active=offer(o), price=active?Number(o.unit_price):0;return `<div class="market-row">${icon(id)}<div class="market-species"><b>${esc(o?.name||id)}</b><small>${group.length} available · ${active?`${esc(o.quantity)} requested`:'No active order'}</small></div><div class="market-price"><b>${active?`${esc(price)} CR`:'—'}</b><small>${active?`up to ${esc(Math.min(group.length,Number(o.quantity))*price)} CR`:'No offer'}</small></div>${active?button('sell','SELL',group[0].id):'<span class="order-state">WAITING</span>'}</div>`;}).join(''):'<p class="market-empty">Hold empty. Catch fish in Coral, then sync your haul.</p>';
+    const inventoryRows=held.size?[...held].map(([id,group])=>{const o=orderFor(id), active=offer(o), price=active?Number(o.unit_price):0, sellable=group.filter(r=>!r.token_id), minted=group.length-sellable.length;return `<div class="market-row">${icon(id)}<div class="market-species"><b>${esc(o?.name||id)}</b><small>${group.length} available${minted?` · ${minted} ON-CHAIN`:''} · ${active?`${esc(o.quantity)} requested`:'No active order'}</small></div><div class="market-price"><b>${active?`${esc(price)} CR`:'—'}</b><small>${active?`up to ${esc(Math.min(sellable.length,Number(o.quantity))*price)} CR`:'No offer'}</small></div>${active?(sellable.length?button('sell','SELL FOR CR · OFF-CHAIN',sellable[0].id):'<span class="order-state">ON-CHAIN</span>'):'<span class="order-state">WAITING</span>'}</div>`;}).join(''):'<p class="market-empty">Hold empty. Catch fish in Coral, then sync your haul.</p>';
     const history=(this.transactions||[]).slice(0,20).map(t=>`<div class="history-row"><span>${esc(t.kind==='fish_sale'?FISH_SPECIES.find(s=>s.id===this.inventory?.receipts?.find(r=>r.id===t.reference_id)?.species_id)?.name||'Fish sale':t.kind.replaceAll('_',' '))}<small>${esc(new Date(t.created_at).toLocaleString())} · ${esc(t.status)} · ${t.kind==='fish_sale'?'1 fish':'transaction'}</small></span><b>${['fish_sale','mission_reward'].includes(t.kind)?'+':'-'}${esc(t.amount)} CR</b></div>`).join('')||'<p class="market-empty">No transactions yet.</p>';
     for(const tab of this.hub.root.querySelectorAll('[data-tab]'))tab.classList.toggle('active',tab.dataset.tab===this.hub.tab);
     this.hub.cashEl.textContent=`${this.active?this.profile?.balance??0:this.progression.cash} CR`;
@@ -337,7 +357,7 @@ export class OnlineGame {
         html+=`<p><small>CONTRACT</small> ${esc(c.contractId)} · <small>ACCOUNT</small> ${esc(c.accountId)}</p>`;
         html+=`<p class="hub-note">Catch mints by server (no popup). Selling to merchant needs your signature. 1 CR = 0.0005 NEAR; CR price stays dynamic.</p>${c.merchantBroke?'<p class="market-feedback is-error">MERCHANT BROKE · treasury empty, no new on-chain orders until owner invests.</p>':c.agent?`<p class="hub-note">Merchant treasury ${near(c.agent.availableTreasury)} NEAR</p>`:''}`;
         html+=`<div class="market-metrics"><div><small>FISH TOKENS</small><strong>${c.tokens.length}</strong></div><div><small>SALE PROCEEDS</small><strong>${near(c.sellerClaim)} <em>NEAR</em></strong></div><div><small>STORAGE DEPOSIT</small><strong>${near(c.storage?.total)} <em>NEAR</em></strong></div></div>`;
-        html+=c.tokens.map(t=>`<div class="market-row"><div class="market-species"><b>${esc(t.title)}</b><small>${esc(t.tokenId)}</small></div><div class="market-price"><b>${t.order?`${near(t.order.unitPrice)} NEAR`:'—'}</b><small>${t.order?'merchant order':'no order'}</small></div>${t.order&&!lowStorage?button('shop-sell','SELL',t.tokenId):`<span class="order-state">${t.order?'NEED STORAGE':'WAITING'}</span>`}</div>`).join('')||'<p class="market-empty">No fish tokens on this account.</p>';
+        html+=c.tokens.map(t=>`<div class="market-row"><div class="market-species"><b>${esc(t.title)}</b><small>${esc(t.tokenId)}</small></div><div class="market-price"><b>${t.order?`${near(t.order.unitPrice)} NEAR`:'—'}</b><small>${t.order?'merchant order':'no order'}</small></div>${t.order&&!lowStorage?button('shop-sell','SELL · ON-CHAIN',t.tokenId):`<span class="order-state">${t.order?'NEED STORAGE':'WAITING'}</span>`}</div>`).join('')||'<p class="market-empty">No fish tokens on this account.</p>';
         html+=`<div class="hub-quick">${button('shop-refresh','SYNC ON-CHAIN')}${lowStorage?button('shop-storage',`STORAGE DEPOSIT ${near(BigInt(SELLER_STORAGE)-BigInt(c.storage?.total||0))} NEAR`):''}${lowStorage?'':!this.active?'<p class="hub-note">Play online to auto-mint catches to this wallet.</p>':!this.profile?.wallet_account?button('verify','VERIFY WALLET · ENABLE AUTO-MINT'):'<p class="hub-note">Auto-mint on: each validated catch mints to this wallet, no popup.</p>'}${this.settlementLine(c,esc,button)}${c.sellerClaim!=='0'?button('shop-withdraw','WITHDRAW NEAR'):''}</div>`;
       }
       if(tx)html+=`<p class="hub-note">LAST TX · ${esc(tx.method)} · ${tx.status==='final'?'FINAL':tx.status==='failed'?'FAILED FINAL':tx.status==='pending'?'PENDING FINALITY':tx.ok?'SUBMITTED · FINALITY UNVERIFIED':'WALLET REPORTED FAILURE'} · ${link(tx.hash)}</p>${tx.status!=='final'&&tx.status!=='failed'?button('shop-verify','VERIFY LAST TX'):''}`;

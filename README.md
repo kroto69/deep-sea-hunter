@@ -24,7 +24,7 @@ Flow diagram (same stages, visual): [`docs/flow-settlement-invisible.html`](docs
 
 | Stage | Status | What is built |
 |---|---|---|
-| 0 Setup | BUILT | Wallet connect + verify; one-time session-key grant (AddKey) + storage deposit; operator auto-mint flag + owner key. |
+| 0 Setup | BUILT | Wallet connect + verify; one-time session-key grant (AddKey) + storage deposit; operator auto-mint flag + owner key. Connecting a wallet auto-enters online play and prompts the one-time VERIFY WALLET signature once per browser session. |
 | 1 Dive & catch | BUILT | Dive, catch, server receipt in Postgres. |
 | 2 Mint | BUILT (two paths) | A: operator auto-mint — LIVE on v2 Testnet. B: session-key `mint_catch` — local only, needs a redeploy (deployed v2 has no `mint_catch`); `POST /api/near/record-mint` records the token so a tokenized fish cannot be sold off-chain for CR. One receipt mints at most once. |
 | 3 Sell to merchant (CR) | BUILT (off-chain) | CR sale with `catch_minted_onchain` + `receipt_listed` guards. On-chain transfer leg (token moves with the sale) NOT built. |
