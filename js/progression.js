@@ -107,6 +107,21 @@ export class Progression {
     return total;
   }
 
+  // Sell a chosen quantity of one species (not the whole hold).
+  // Same pricing as sellAll: base price each, +15% per Buyer Contacts level.
+  sellSpecies(id, qty) {
+    const have = this.data.inventory[id] || 0;
+    const q = Math.max(0, Math.min(Math.floor(Number(qty) || 0), have));
+    if (!q) return { qty: 0, total: 0 };
+    const bonus = 1 + this.data.upgrades.sales * 0.15;
+    const total = Math.round((FISH_PRICES[id] || 20) * q * bonus);
+    this.data.cash += total;
+    this.data.inventory[id] = have - q;
+    if (!this.data.inventory[id]) delete this.data.inventory[id];
+    this.save();
+    return { qty: q, total };
+  }
+
   addCash(n) {
     if (!Number.isSafeInteger(n) || n < 0) return false;
     this.data.cash += n;

@@ -58,6 +58,11 @@ export class Hub {
       const total = p.sellAll();
       if (total > 0) { this.audio.coin(); this.hud.notify(`SOLD · +${total} CREDITS`); }
       else this.hud.notify('NO FISH TO SELL');
+    } else if (action === 'sell-qty') {
+      const input = this.body.querySelector(`[data-qty-for="${id}"]`);
+      const result = p.sellSpecies(id, Number(input?.value));
+      if (result.qty > 0) { this.audio.coin(); this.hud.notify(`SOLD ${result.qty} × ${id.toUpperCase()} · +${result.total} CR`); }
+      else this.hud.notify('NOTHING TO SELL');
     } else if (action === 'upgrade') {
       if (p.buyUpgrade(id)) {
         this.audio.unlockSound();
@@ -106,7 +111,8 @@ export class Hub {
       const rows = Object.entries(inv).filter(([, n]) => n > 0);
       const total = Math.round(rows.reduce((s, [id, n]) => s + (FISH_PRICES[id] || 20) * n, 0) * (1 + p.upgradeLevel('sales') * 0.15));
       html += `<div class="hub-station"><span>FISH MARKET</span><b>${p.cash} CR</b></div>`;
-      html += rows.length ? rows.map(([id, n]) => `<div class="hub-row"><div><b>${id.toUpperCase()}</b><br><span class="hub-dim">${n} in hold · ${FISH_PRICES[id] || 20} CR each</span></div><span>${n} fish</span></div>`).join('') : '<div class="hub-note">Hold empty. Caught fish arrive here.</div>';
+      html += `<p class="hub-note">Your catch, held on the boat. Sell fish here for CR — choose how many of each species to sell, or sell the whole hold at once.</p>`;
+      html += rows.length ? rows.map(([id, n]) => `<div class="hub-row"><div><b>${id.toUpperCase()}</b><br><span class="hub-dim">${n} in hold · ${FISH_PRICES[id] || 20} CR each</span></div><input class="sell-qty" type="number" min="1" max="${n}" step="1" value="1" data-qty-for="${id}" aria-label="How many ${id} to sell"><button class="hub-btn" data-action="sell-qty" data-id="${id}">SELL</button></div>`).join('') : '<div class="hub-note">Hold empty. Caught fish arrive here.</div>';
       html += `<button class="hub-btn wide" data-action="sell" ${total ? '' : 'disabled'}>SELL CATCH · ${total} CR</button>`;
       html += `<details><summary>Fish price list</summary>${Object.entries(FISH_PRICES).map(([id, price]) => `<div class="hub-row"><span>${id.toUpperCase()}</span><span>${price} CR</span></div>`).join('')}</details>`;
       html += '<p class="hub-note">Offline sale history was not stored in existing save. Online transactions appear under ONLINE / NEAR.</p>';
@@ -129,14 +135,16 @@ export class Hub {
       }
     } else if (this.tab === 'storage') {
       const rows = Object.entries(inv).filter(([, n]) => n > 0);
+      html += `<p class="hub-note">Everything in your hold, by species. Selling here is the same as selling from FISH — pick a quantity, or sell everything at once.</p>`;
       html += rows.length
-        ? rows.map(([id, n]) => `<div class="hub-row"><div>${id.toUpperCase()}</div><div class="hub-dim">${n} × ${FISH_PRICES[id] || 20} CR</div></div>`).join('')
+        ? rows.map(([id, n]) => `<div class="hub-row"><div>${id.toUpperCase()}</div><div class="hub-dim">${n} × ${FISH_PRICES[id] || 20} CR</div><input class="sell-qty" type="number" min="1" max="${n}" step="1" value="1" data-qty-for="${id}" aria-label="How many ${id} to sell"><button class="hub-btn" data-action="sell-qty" data-id="${id}">SELL</button></div>`).join('')
         : `<div class="hub-note">No fish in storage. Hunt and it lands here automatically.</div>`;
       const total = rows.reduce((s, [id, n]) => s + (FISH_PRICES[id] || 20) * n, 0);
       html += `<button class="hub-btn wide" data-action="sell">SELL ALL · ${total} CR</button>`;
       const specimens = Object.keys(p.data.rare);
       html += `<div class="hub-note">Inventory · photos: ${Object.keys(p.data.photos).length} · rare specimens: ${specimens.length ? specimens.join(', ') : 'none'}</div>`;
     } else if (this.tab === 'missions') {
+      html += `<p class="hub-note">Jobs pay CR when you hit the goal. Claim the reward once a job is done.</p>`;
       for (const m of MISSIONS) {
         const prog = p.missionProgress(m);
         const claimed = p.data.claimed.includes(m.id);
@@ -147,6 +155,7 @@ export class Hub {
         </div>`;
       }
     } else if (this.tab === 'records') {
+      html += `<p class="hub-note">Your catch records, photos, and rare finds from every dive.</p>`;
       const records = Object.entries(p.data.records);
       html += records.length
         ? records.map(([id, r]) => `<div class="hub-row"><div>${id.toUpperCase()}</div><div class="hub-dim">${r.count} caught</div></div>`).join('')
