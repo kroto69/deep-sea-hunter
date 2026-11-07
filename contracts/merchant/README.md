@@ -6,7 +6,9 @@ Separate merchant contract prototype. Existing collectibles contract is untouche
 
 Read-only RPC audit recorded deployed code hash `61u8Z12Pi1AcbekbvAEst7jp4Am2JJLG7JG2baMmZLRJ`; finalized merchant sale later used this code hash and transferred one `fish:fish-demo-0001` into `dsh-merchant-desk.deepfish-owner.testnet`, creating 0.01 NEAR seller claim. Storage top-up `G2X3oGevwSDaXdMgo43yV4jZXqz2NfTxNgLfr3LNFJgw` also finalized. App uses contract account `dsh-merchant-v1.deepfish-owner.testnet`; on-chain `merchant_id` is the separate role account `dsh-merchant-desk.deepfish-owner.testnet`.
 
-Current local WASM SHA-256: `e134c5a7dfd86d949c6a9652ea1c32242e902490b51fdf8dd09662c01b1519b9`. Deployed WASM fetched read-only at block `276587398` has SHA-256 `4a8560e1672b47b6912c12f82d7b708d0a7c6e41ab939c5c07470bd41f7cf1ad`, NEAR code hash `61u8Z12Pi1AcbekbvAEst7jp4Am2JJLG7JG2baMmZLRJ`. Bytes differ: deployed code does not include local resolver/storage changes. Rust suite: 46 passed; Sandbox economy and transfer pass. Not NEP-245 proof.
+Deployed v2 `dsh-merchant-v2.deepfish-owner.testnet` WASM SHA-256 `6dd52d1115cf4134958854e679c2e685a0949de17f6421e29034e1e09f43703d` (NEAR code hash `8PjySGU8MWsvciY2DjKGwabi2tdhWYo51MkyDKyNZboz`, block `276598575`) matches local `target/wasm32-unknown-unknown/release/deepfish_merchant_economy.wasm` (cargo build, no `wasm-opt`). Testnet mint, order, and sale on v2 are final; see `docs/ONCHAIN_ECONOMY_PROOF.md`. Old v1 `dsh-merchant-v1` SHA-256 `4a8560e1672b47b6912c12f82d7b708d0a7c6e41ab939c5c07470bd41f7cf1ad` lacks resolver/storage fixes. Rust suite: 46 passed. Earlier Sandbox passes used a `wasm-opt` build; this exact unoptimized v2 binary fails Sandbox `new` with `PrepareError: Deserialization`, so Sandbox does not cover the deployed bytes. Not NEP-245 proof.
+
+Use `storage_deposit` with `{"account_id":"..."}`. Key `id` is ignored and credits the caller.
 
 ### NEP-245 findings
 

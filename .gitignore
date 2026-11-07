@@ -43,3 +43,4 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+contracts/merchant/test-receiver/target/
