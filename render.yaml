@@ -1,7 +1,7 @@
 # Deep Sea Hunter — Render Blueprint (satu paket, diputuskan 2026-11-07)
 # API Docker + Postgres free + frontend statis, semua di Render.
-# Cara pakai: push repo (commit lokal 52a88f3 + 229cb39 + yang ini masih BELUM push),
-# lalu di Render Dashboard > New > Blueprint > pilih repo ini.
+# Cara pakai: push branch feat/auto-mint-merchant-agent (12 commit di depan
+# origin, BELUM push), lalu di Render Dashboard > New > Blueprint > pilih repo ini.
 #
 # Yang masih harus diisi manual:
 #   1. ALLOWED_ORIGIN — isi URL frontend statis (https://deep-sea-hunter.onrender.com)
@@ -19,7 +19,7 @@
 # API_PORT dijembatani dari $PORT Render karena server/src/config/env.js hanya
 # membaca API_PORT (bukan PORT). API_HOST 0.0.0.0 wajib supaya bisa dijangkau Render.
 # Frontend statis TIDAK butuh build tool: buildCommand hanya menyalin file yang
-# dimainkan (index.html, style.css, js/) ke dist/ supaya server/, contracts/,
+# dimainkan (index.html, style.css, js/, audio/) ke dist/ supaya server/, contracts/,
 # docs/ tidak ikut ter-publish.
 services:
   - type: web
@@ -61,7 +61,7 @@ services:
   - type: static
     name: deep-sea-hunter
     plan: free
-    buildCommand: mkdir -p dist && cp index.html collectibles.html style.css dist/ && cp -r js dist/
+    buildCommand: mkdir -p dist && cp index.html collectibles.html style.css dist/ && cp -r js dist/ && cp -r audio dist/
     staticPublishPath: ./dist
 
 databases:

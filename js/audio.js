@@ -1,9 +1,16 @@
-// Procedural WebAudio: no external sound assets.
+// Procedural WebAudio SFX + one licensed music track (see MUSIC_URL).
+// Music: "Deep Ocean" by MeditationSpiritual (Pixabay, royalty-free).
+// File: audio/deep-ocean.mp3 — bundled locally, copied to dist/ by render.yaml.
+const MUSIC_URL = 'audio/deep-ocean.mp3';
+const MUSIC_VOLUME = 0.6; // 60%, as requested
+
 export class GameAudio {
   constructor() {
     this.ctx = null;
     this.master = null;
     this.muted = false;
+    this.music = null;
+    this.musicOn = true;
   }
 
   init() {
@@ -15,6 +22,36 @@ export class GameAudio {
     this.master.gain.value = 0.55;
     this.master.connect(this.ctx.destination);
     this._startAmbience();
+    this.startMusic();
+  }
+
+  // Background music: a plain <audio> element at exactly 60% volume, so
+  // the requested loudness is honoured literally (not scaled again by the
+  // SFX master gain). Starts on the first user gesture (init runs from
+  // unlockAudio), loops forever. A missing file just never plays — the
+  // game never breaks on it.
+  startMusic() {
+    if (this.music) { this._playMusic(); return; }
+    const el = new Audio(MUSIC_URL);
+    el.loop = true;
+    el.volume = MUSIC_VOLUME;
+    el.preload = 'auto';
+    el.addEventListener('error', () => { this.music = null; });
+    this.music = el;
+    this._playMusic();
+  }
+  _playMusic() {
+    if (!this.music || !this.musicOn) return;
+    const p = this.music.play();
+    if (p) p.catch(() => { /* autoplay blocked until a gesture; next gesture retries */ });
+  }
+  // Returns the new state (true = playing). Only the music track is
+  // affected; the procedural SFX keep their own muted flag.
+  toggleMusic() {
+    this.musicOn = !this.musicOn;
+    if (!this.music) { if (this.musicOn) this.startMusic(); return this.musicOn; }
+    if (this.musicOn) this._playMusic(); else this.music.pause();
+    return this.musicOn;
   }
 
   resume() {
@@ -164,6 +201,7 @@ export class GameAudio {
   }
 
   dispose() {
+    if (this.music) { try { this.music.pause(); } catch {} this.music = null; }
     if (!this.ctx) return;
     try { this.ambience?.src.stop(); } catch {}
     this.ctx.close();

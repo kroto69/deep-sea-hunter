@@ -18,6 +18,23 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 
 Verified Testnet sell finalized for one existing demo token. This proves one merchant transaction, not full NEP-245 compliance or production readiness. Local simulations and PostgreSQL balances remain off-chain.
 
+## Where the flow stands (2026-11-07)
+
+Flow diagram (same stages, visual): [`docs/flow-settlement-invisible.html`](docs/flow-settlement-invisible.html).
+
+| Stage | Status | What is built |
+|---|---|---|
+| 0 Setup | BUILT | Wallet connect + verify; one-time session-key grant (AddKey) + storage deposit; operator auto-mint flag + owner key. |
+| 1 Dive & catch | BUILT | Dive, catch, server receipt in Postgres. |
+| 2 Mint | BUILT (two paths) | A: operator auto-mint — LIVE on v2 Testnet. B: session-key `mint_catch` — local only, needs a redeploy (deployed v2 has no `mint_catch`); `POST /api/near/record-mint` records the token so a tokenized fish cannot be sold off-chain for CR. One receipt mints at most once. |
+| 3 Sell to merchant (CR) | BUILT (off-chain) | CR sale with `catch_minted_onchain` + `receipt_listed` guards. On-chain transfer leg (token moves with the sale) NOT built. |
+| 4 Player shops | BACKEND ONLY | License/list/buy/delist endpoints + escrow + supply-aware pricing. Hub UI NOT built. |
+| 5 NEAR-tab token sell | BUILT (Testnet) | `accept_purchase_order` verified FINAL on v1 + v2. |
+| 6 Tick + Fast Forward | BUILT | 60 s market tick; Fast Forward simulates 7 days in 1 minute, local only. |
+| 7 Withdraw CR → NEAR | NOT BUILT | Rate exists in code (1 CR = 0.0005 NEAR, agent conversion); withdrawal flow + funding source undecided. |
+
+Background music: "Deep Ocean" by MeditationSpiritual (Pixabay, royalty-free), bundled as `audio/deep-ocean.mp3` (6:44, 256 kbps, ~12 MB), looped at 60% volume, starts on the first click; MUSIC ON/OFF button under WALLET. The static site serves it (`render.yaml` copies `audio/` to `dist/`).
+
 ## Run game and backend
 
 Requirements: Node.js/npm, Docker Compose, Python 3. Set local-only values in `.env` using `.env.example`; never expose secrets. Preserve existing PostgreSQL volumes.
@@ -82,7 +99,7 @@ Online Guest can catch all 19 fish shown by `js/fish.js`. Each seeded fish has i
 
 Fast Forward is a deterministic local demo of seven days of demand, stock, and treasury. It displays before/after and does not persist or call backend/chain. A treasury at or below the 1000 CR reserve floor starts the week bankrupt (no trading); pass `invest: { day, amount }` to `simulateSevenDays` to preview a reopening investment on that day.
 
-NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes storage deposit, sell, and withdrawal calls. `.env.example` configures `NEAR_CONTRACT_ID` for collectibles, not merchant; set merchant ID separately to enable merchant state/actions. Mint stays disabled until receipt-backed authorization is safe. After a wallet returns a hash, UI verifies signer, receiver, merchant method, final execution status, and merchant receipt against Testnet RPC. UI shows FINAL only after successful final receipt verification; state still needs SYNC ON-CHAIN. Pending finality stays labeled pending. Verify resulting state before claiming economic settlement. Verified Testnet sale evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`; merchant prototype is not confirmed NEP-245 compliant. Google/Email controls are disabled; authentication is NOT IMPLEMENTED.
+NEAR tab reads state from a configured `NEAR_MERCHANT_CONTRACT_ID` and exposes storage deposit, sell, and withdrawal calls. `.env.example` configures `NEAR_CONTRACT_ID` for collectibles, not merchant; set merchant ID separately to enable merchant state/actions. Mint is live two ways: operator auto-mint (verified on v2 Testnet) and receipt-verified session-key mint (`mint_catch`, local — deployed v2 has no `mint_catch`, needs a redeploy). `POST /api/near/record-mint` writes the token id onto the receipt so a tokenized fish cannot be sold off-chain for CR. After a wallet returns a hash, UI verifies signer, receiver, merchant method, final execution status, and merchant receipt against Testnet RPC. UI shows FINAL only after successful final receipt verification; state still needs SYNC ON-CHAIN. Pending finality stays labeled pending. Verify resulting state before claiming economic settlement. Verified Testnet sale evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`; merchant prototype is not confirmed NEP-245 compliant. Google/Email controls are disabled; authentication is NOT IMPLEMENTED.
 
 ## NEP-245 audit status
 

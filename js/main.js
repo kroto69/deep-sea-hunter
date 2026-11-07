@@ -192,6 +192,15 @@ const unlockAudio = () => {
 window.addEventListener('pointerdown', unlockAudio);
 window.addEventListener('keydown', unlockAudio);
 
+// Background music toggle (Deep Ocean, 60%). The track itself starts in
+// audio.init() on the first gesture above.
+const musicBtn = document.getElementById('music-toggle');
+if (musicBtn) musicBtn.addEventListener('click', () => {
+  const on = audio.toggleMusic();
+  musicBtn.textContent = on ? 'MUSIC ON' : 'MUSIC OFF';
+  musicBtn.setAttribute('aria-pressed', String(on));
+});
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();

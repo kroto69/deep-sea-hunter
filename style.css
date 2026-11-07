@@ -58,6 +58,15 @@ html, body {
   cursor: pointer; max-width: min(42vw, 230px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #wallet-toggle:focus-visible, #wallet-login button:focus-visible, #wallet-pick button:focus-visible { outline: 3px solid #ffe9a0; outline-offset: 2px; }
+#music-toggle {
+  position: fixed; z-index: 30; top: calc(max(12px, env(safe-area-inset-top)) + 42px); left: 50%;
+  transform: translateX(-50%); pointer-events: auto;
+  background: rgba(4, 36, 52, .88); color: #a9eac9;
+  border: 1px solid #539d9c; border-radius: 6px;
+  padding: 7px 12px; font: bold 12px 'Segoe UI', Arial, sans-serif;
+  cursor: pointer;
+}
+#music-toggle:focus-visible { outline: 3px solid #ffe9a0; outline-offset: 2px; }
 #wallet-login {
   position: fixed; z-index: 60; top: max(54px, env(safe-area-inset-top)); left: 50%;
   transform: translateX(-50%); width: min(420px, calc(100vw - 24px));
