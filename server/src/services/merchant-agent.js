@@ -83,10 +83,13 @@ const broke = (state, unitPrice) => !state || BigInt(state.availableTreasury) < 
 // that token owner holds. The contract keys orders by token, so species-level orders would never fill.
 export async function ensureOrder({ tokenId, playerId, unitPrice, ttlMs = ORDER_TTL_MS }) {
   const orderId = `order-${tokenId}`;
-  // ponytail: one order per token for life. Filled or expired orders are not reopened, which also
-  // avoids burning gas on "duplicate order" reverts every tick. Add versioned order ids to relist.
+  // Relist (contract v3+): a closed order — filled or expired — no longer
+  // blocks its token forever. The contract releases the old order's
+  // unspent reserve when the id is reused, so the agent just retries the
+  // create below. Against the old v2 contract the create still reverts
+  // ("Invalid or duplicate order") and the catch maps it to already_open.
   const existing = (await viewM('purchase_order', { order_id: orderId })).value;
-  if (existing) return { status: existing.active && existing.expires_at > Date.now() ? 'already_open' : 'closed', orderId };
+  if (existing?.active && existing.expires_at > Date.now()) return { status: 'already_open', orderId };
   const state = await chainState();
   if (broke(state, unitPrice)) return { status: 'broke', availableTreasury: state?.availableTreasury ?? '0' };
   const expiresAt = Math.min(Date.now() + ttlMs, Date.now() + ORDER_TTL_MS * 6);

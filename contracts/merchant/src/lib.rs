@@ -124,7 +124,18 @@ impl Contract {
     #[payable]
     pub fn create_purchase_order(&mut self, order_id: String, token_id: String, quantity: U128, unit_price: U128, expires_at: u64) {
         require!(env::predecessor_account_id() == self.owner, "Owner only");
-        require!(!order_id.is_empty() && order_id.len() <= 64 && self.orders.get(&order_id).is_none(), "Invalid or duplicate order");
+        require!(!order_id.is_empty() && order_id.len() <= 64, "Invalid order");
+        // Relist: an order id may be reused once its order is closed — filled
+        // (inactive, quantity 0) or expired. An open order still rejects.
+        // Reuse releases the old order's unspent reserve first, so an
+        // expired order never locks treasury funds twice. The id stays bound
+        // to its token: reusing it for another token is rejected.
+        if let Some(old) = self.orders.get(&order_id) {
+            require!(old.token_id == token_id, "Order id belongs to another token");
+            require!(!old.active || env::block_timestamp_ms() >= old.expires_at, "Order already open");
+            let unspent = old.quantity.checked_mul(old.unit_price).expect("Order reserve overflow");
+            self.reserved_orders = self.reserved_orders.checked_sub(unspent).expect("Order reserve underflow");
+        }
         require!(self.mt_supply.get(&token_id).is_some(), "Token not found");
         require!(quantity.0 > 0 && unit_price.0 > 0, "Invalid order amount");
         require!(unit_price.0 <= self.max_trade, "Trade limit exceeded");

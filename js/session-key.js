@@ -24,7 +24,7 @@
 import { KeyPair, keyStores, connect, transactions } from 'https://esm.sh/near-api-js@5.1.1';
 import { testnetWallet, walletAccount } from './wallet.js';
 
-export const RPC_URL = 'https://rpc.testnet.near.org';
+export const RPC_URL = 'https://test.rpc.fastnear.com';
 export const SESSION_METHODS = ['mint_catch', 'mt_transfer', 'mt_batch_transfer'];
 export const DEFAULT_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR, gas only
 export const SETTLEMENT_GAS = 100000000000000n; // 100 Tgas
@@ -127,7 +127,7 @@ export async function callWithSessionKey({ contractId, methodName, args, gas = S
 // Settle one catch on-chain: mint the fish token to the catcher from a
 // server-signed receipt. `receipt` is {receipt_id, player_id, species_id,
 // title, signature}; the signature comes from the server receipt-signing
-// endpoint (not built yet — see docs/SETTLEMENT_SESSION_KEYS.md).
+// endpoint (POST /api/near/receipt-signature).
 export async function settleCatch({ contractId, receipt } = {}) {
   if (!receipt?.receipt_id || !receipt?.player_id || !receipt?.species_id || !receipt?.title || !receipt?.signature) throw new Error('Incomplete signed receipt');
   return callWithSessionKey({

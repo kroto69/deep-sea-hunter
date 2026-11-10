@@ -13,7 +13,7 @@
 
 Wallet Selector is optional for explicit NEAR actions. Normal gameplay does not require wallet, seed phrase, popup or gas. The deployed `deepfish-contract.testnet` NFT contract is separate and untouched.
 
-`contracts/merchant/` is a separate prototype. Local WASM build present; the Sandbox economy suite passed previously but was not re-run in this sandbox; current local WASM SHA-256 `86fbc4ad61ec5d71ad4ae755656034ef6cb7bb718346eed8505934340d368541` (rebuilt 2026-11-07, includes `mint_catch`; the `95def789…` build is superseded). Three merchant sales (v1, v2 order-1, and the e2e UI sale), a storage top-up, and one withdrawal are verified final on Testnet; full evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. NEP-245 blockers remain; local build/Sandbox do not prove compliance.
+`contracts/merchant/` is a separate prototype. Local WASM build present; the Sandbox economy suite passed previously but was not re-run in this sandbox; current local WASM SHA-256 `fdaa8915e6a8f236db1da627bb7adbdd3ac9408a90c3c9bc5a6be2925b98646f` (rebuilt 2026-11-10, includes `mint_catch` + order relist; the `95def789…` build is superseded). Three merchant sales (v1, v2 order-1, and the e2e UI sale), a storage top-up, and one withdrawal are verified final on Testnet; full evidence in `docs/ONCHAIN_ECONOMY_PROOF.md`. NEP-245 blockers remain; local build/Sandbox do not prove compliance.
 
 ## Merchant audit blockers
 

@@ -15,6 +15,11 @@
 #   3. Asks for confirmation, then deploys with `near deploy` and
 #      initFunction `new` (owner / merchant desk / treasury must be
 #      three distinct accounts; max_trade defaults to 1000 NEAR).
+#      With --upgrade, deploys the WASM only (no initFunction `new`) over
+#      the existing contract — for a v3 code upgrade over live v2 state.
+#      Only use it after the Borsh checklist in docs/DEPLOYMENT.md §3 and
+#      contracts/merchant/README.md passes; the standing guidance prefers
+#      a fresh deploy, because v3 adds settlement_key/used_receipts fields.
 #   4. Runs `near state` afterwards and prints the explorer link so the
 #      deploy transaction hash can be recorded from the log (no post-deploy
 #      code check — the no-code check runs before deploy).
@@ -35,7 +40,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONTRACT_ID=""; OWNER_ID=""; MERCHANT_ID=""; TREASURY_ID=""
-FUND_NEAR=""; YES=0
+FUND_NEAR=""; YES=0; UPGRADE=0
 MAX_TRADE="1000000000000000000000000"  # 1000 NEAR in yoctoNEAR
 NAME="Deep Sea Hunter Merchant"; SYMBOL="DSH"
 WASM="contracts/merchant/target/wasm32-unknown-unknown/release/deepfish_merchant_economy.wasm"
@@ -44,6 +49,7 @@ usage() {
   sed -n '2,/^set -euo pipefail/p' "$0" | sed 's/^# \?//'
   echo "Flags: --contract-id, --owner-id, --merchant-id, --treasury-id (all required)"
   echo "       --fund-near N   fund the treasury with N NEAR after deploy (optional)"
+  echo "       --upgrade       deploy code only, no init (see header; Borsh check first)"
   echo "       --yes           skip the confirmation prompts (owner-attended runs only)"
   echo "       --help          show this text"
 }
@@ -62,6 +68,7 @@ while [ $# -gt 0 ]; do
     --merchant-id) MERCHANT_ID="$2"; shift 2 ;;
     --treasury-id) TREASURY_ID="$2"; shift 2 ;;
     --fund-near) FUND_NEAR="$2"; shift 2 ;;
+    --upgrade) UPGRADE=1; shift ;;
     --yes) YES=1; shift ;;
     --help) usage; exit 0 ;;
     *) echo "Unknown flag: $1" >&2; usage >&2; exit 2 ;;
@@ -130,12 +137,19 @@ echo "  symbol:    $SYMBOL"
 echo "  wasm:      $WASM"
 confirm "Deploy this contract (paid transaction)?" || { echo "Aborted."; exit 1; }
 
-INIT_ARGS=$(printf '{"owner_id":"%s","merchant_id":"%s","treasury_id":"%s","max_trade":"%s","name":"%s","symbol":"%s"}' \
-  "$OWNER_ID" "$MERCHANT_ID" "$TREASURY_ID" "$MAX_TRADE" "$NAME" "$SYMBOL")
 LOG=$(mktemp /tmp/dsh-deploy-XXXXXX.log)
 echo "Deploy log: $LOG"
-near deploy --accountId "$CONTRACT_ID" --wasmFile "$WASM" --initFunction new --initArgs "$INIT_ARGS" 2>&1 | tee "$LOG" \
-  || { echo "Deploy failed — near-cli flags differ between versions; check: near deploy --help" >&2; echo "Full output kept in $LOG" >&2; exit 1; }
+if [ "$UPGRADE" = 1 ]; then
+  echo "UPGRADE MODE: code only, no init — live state is preserved. Never run initFunction new on an existing contract."
+  confirm "Upgrade $CONTRACT_ID with the new WASM (state preserved, no re-init)?" || { echo "Aborted."; exit 1; }
+  near deploy --accountId "$CONTRACT_ID" --wasmFile "$WASM" 2>&1 | tee "$LOG" \
+    || { echo "Deploy failed — near-cli flags differ between versions; check: near deploy --help" >&2; echo "Full output kept in $LOG" >&2; exit 1; }
+else
+  INIT_ARGS=$(printf '{"owner_id":"%s","merchant_id":"%s","treasury_id":"%s","max_trade":"%s","name":"%s","symbol":"%s"}' \
+    "$OWNER_ID" "$MERCHANT_ID" "$TREASURY_ID" "$MAX_TRADE" "$NAME" "$SYMBOL")
+  near deploy --accountId "$CONTRACT_ID" --wasmFile "$WASM" --initFunction new --initArgs "$INIT_ARGS" 2>&1 | tee "$LOG" \
+    || { echo "Deploy failed — near-cli flags differ between versions; check: near deploy --help" >&2; echo "Full output kept in $LOG" >&2; exit 1; }
+fi
 
 echo "== Verify =="
 near state "$CONTRACT_ID"

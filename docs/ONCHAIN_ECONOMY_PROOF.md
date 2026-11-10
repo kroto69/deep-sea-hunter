@@ -67,7 +67,7 @@ is stored in `.env`, this repo, or any migration.
 Prerequisites verified on Testnet:
 
 - `storage_deposit` for `flatrice4664.testnet`: `CGAxFr7CU74rhpyvNsfgJr6CRJV4533Ly6CDiymjKhnA`, total 0.1 NEAR.
-- RPC `https://test.rpc.fastnear.com` reports `chain_id=testnet`. `https://rpc.testnet.near.org` is deprecated and unreachable/timing out from this sandbox (no HTTP status returned 2026-11-08, 429 not confirmed); the server moved its chain views to `https://test.rpc.fastnear.com` (`server/src/config/env.js:30`), but `js/session-key.js:27` still points the frontend session-key RPC at the deprecated endpoint.
+- RPC `https://test.rpc.fastnear.com` reports `chain_id=testnet`. `https://rpc.testnet.near.org` is deprecated and unreachable/timing out from this sandbox (no HTTP status returned 2026-11-08, 429 not confirmed); the server moved its chain views to `https://test.rpc.fastnear.com` (`server/src/config/env.js:30`), and the frontend session-key RPC moved there too on 2026-11-10 (`js/session-key.js:27`).
 
 Signer-path proof (server code, not a UI session):
 
