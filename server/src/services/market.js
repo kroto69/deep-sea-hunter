@@ -125,7 +125,7 @@ export async function sell(db, identity, quoteId, idempotencyKey) {
 // game treasury; the license never expires and cannot be resold in this slice.
 export async function buyLicense(db, identity, idempotencyKey) {
   return playerTransaction(db, identity, idempotencyKey, async (c, scoped) => {
-    const existing = (await c.query('SELECT player_id FROM shop_licenses WHERE player_id=$1 FOR UPDATE', [identity.id])).rows[0];
+    const existing = (await c.query('SELECT player_id, active FROM shop_licenses WHERE player_id=$1 FOR UPDATE', [identity.id])).rows[0];
     if (existing?.active) fail('shop_license_exists');
     const price = SHOP_LICENSE_PRICE_CR;
     const balance = (await c.query('UPDATE player_accounts SET balance=balance-$2,version=version+1 WHERE player_id=$1 AND balance>=$2 RETURNING balance', [identity.id, price])).rows[0]?.balance;

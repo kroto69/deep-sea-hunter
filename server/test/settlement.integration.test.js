@@ -49,6 +49,10 @@ test('receipt-signature endpoint signs the caller\'s own valid receipt', { skip:
   // Unknown receipt.
   assert.equal((await seller.req('POST', '/api/near/receipt-signature', { receiptId: randomUUID() })).statusCode, 404);
   // Expired receipt cannot be signed.
+  // receipt_expiration_check requires expires_at > created_at, so the
+  // receipt must be older than the 1s backdate margin before we can
+  // expire it; otherwise the UPDATE itself violates the CHECK.
+  await new Promise((r) => setTimeout(r, 1100));
   await db.query("UPDATE catch_receipts SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [receipts[1]]);
   const expired = await seller.req('POST', '/api/near/receipt-signature', { receiptId: receipts[1] });
   assert.equal(expired.statusCode, 409, expired.body); assert.equal(expired.json().error, 'receipt_unavailable');
