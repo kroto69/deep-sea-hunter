@@ -77,6 +77,23 @@ export async function merchantStock(tokenId) {
   return nearString((await viewM('merchant_inventory', { token_id: tokenId })).value);
 }
 
+// Double-sell guard (settlement.js residual, now closed): a catch minted
+// on-chain whose record never landed still has token_id NULL in the DB,
+// so the DB-only guard in sell() cannot see it. Ask the chain whether
+// either token this receipt could have produced was ever minted:
+// fish:{receipt} (session-key mint_catch) or fish:catch-{receipt}
+// (operator auto-mint, if the process died between mint and record).
+// mt_supply is monotonic — the contract has no burn — so a supply means
+// the token exists no matter who holds it now (held, transferred, or
+// already sold on-chain to the merchant). One batch view call, and it
+// works on the deployed v2 contract too (these views predate it; v2
+// just cannot mint_catch yet). viewFn is injectable for tests, same
+// pattern as recordMint.
+export async function receiptMintedOnChain(receiptId, viewFn = viewM) {
+  const { value } = await viewFn('mt_batch_supply', { token_ids: [`fish:${receiptId}`, `fish:catch-${receiptId}`] });
+  return (value || []).some(v => v !== null && v !== undefined && BigInt(v) > 0n);
+}
+
 // The cheapest order the agent can ever place: PRICE_LIMITS.min is 1 CR
 // (js/economy-rules.js) and the bridge is fixed at 1 CR = 0.0005 NEAR
 // (crToYocto in ticks.js). Must stay equal to crToYocto(1) — pinned by

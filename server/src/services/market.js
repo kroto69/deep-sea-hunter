@@ -1,7 +1,31 @@
 import { randomUUID } from 'node:crypto';
+import { config } from '../config/env.js';
 import { fail, playerTransaction, ledger, transaction } from './transaction.js';
 import { requireActiveSession } from './sessions.js';
+import { receiptMintedOnChain } from './merchant-agent.js';
 import { isMerchantBankrupt, reopenAmountNeeded, SHOP_LICENSE_PRICE_CR } from '../domain/economy.js';
+
+// A minted catch must never be sold for CR in any path. The DB token_id
+// guard in each function below catches recorded mints; this closes the
+// record-mint bypass by asking the chain (see receiptMintedOnChain).
+// Fail-closed: if the chain cannot be read, the sale is refused rather
+// than risking a double payment. Skipped when no merchant contract is
+// configured — then no mint could exist. The check runs inside the
+// caller's transaction, after the cheap DB check: one view call,
+// normally well under a second; the row locks it briefly holds cover
+// only this player's receipt and quote.
+// mintedFn / merchantContractId are injectable for tests (same pattern
+// as recordMint's viewFn); call sites use the defaults.
+export async function assertNotMintedOnChain(receiptId, { mintedFn = receiptMintedOnChain, merchantContractId = config.merchantContractId } = {}) {
+  if (!merchantContractId) return;
+  let minted;
+  try {
+    minted = await mintedFn(receiptId);
+  } catch {
+    fail('onchain_check_unavailable', 503);
+  }
+  if (minted) fail('catch_minted_onchain');
+}
 
 // Close a broke merchant: shop stops buying (quote/sell/tick/orders all gate on
 // enabled), bankrupt_at records why it closed. Callers hold the merchant row lock.
@@ -38,6 +62,9 @@ export async function quote(db, identity, receiptId) {
       AND NOT EXISTS (SELECT 1 FROM shop_listings sl WHERE sl.receipt_id=r.id AND sl.status='active')
       AND m.enabled AND o.quantity>0 AND o.expires_at>clock_timestamp() AND o.price_version=ms.price_version ORDER BY o.merchant_id LIMIT 1`, [receiptId,identity.id]);
     if (!rows.length) fail('no_quote_available');
+    // A minted-but-unrecorded catch must not even get a quote: the DB
+    // guard above (token_id IS NULL) cannot see it.
+    await assertNotMintedOnChain(receiptId);
     const r = rows[0];
     return (await c.query(`INSERT INTO market_quotes(id,player_id,merchant_id,receipt_id,unit_price,price_version,expires_at)
       VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()+interval '30 seconds') RETURNING *`, [randomUUID(),identity.id,r.merchant_id,receiptId,r.unit_price,r.price_version])).rows[0];
@@ -52,6 +79,8 @@ export async function sell(db, identity, quoteId, idempotencyKey) {
     const r = (await c.query('SELECT * FROM catch_receipts WHERE id=$1 AND player_id=$2 FOR UPDATE', [q.receipt_id,identity.id])).rows[0];
     // Minted catch is sold on-chain only; selling it for CR too would pay twice for one fish.
     if (r?.token_id) fail('catch_minted_onchain');
+    // Same, for a mint whose record never landed (see assertNotMintedOnChain).
+    await assertNotMintedOnChain(r.id);
     const price = (await c.query('SELECT * FROM market_state WHERE species_id=$1 FOR UPDATE', [r.species_id])).rows[0];
     const order = (await c.query('SELECT *,expires_at>clock_timestamp() active FROM merchant_orders WHERE merchant_id=$1 AND species_id=$2 FOR UPDATE', [m.id,r.species_id])).rows[0];
     const species = (await c.query('SELECT * FROM species WHERE id=$1 FOR SHARE', [r.species_id])).rows[0];
@@ -117,6 +146,11 @@ export async function listFish(db, identity, receiptId, price, idempotencyKey) {
     const r = (await c.query('SELECT * FROM catch_receipts WHERE id=$1 AND player_id=$2 FOR UPDATE', [receiptId, identity.id])).rows[0];
     if (!r || r.status !== 'valid' || !(await c.query('SELECT id FROM catch_receipts WHERE id=$1 AND expires_at>clock_timestamp()', [r.id])).rowCount) fail('receipt_unavailable');
     if (!(await c.query('SELECT receipt_id FROM inventory_receipts WHERE receipt_id=$1 AND player_id=$2 AND sold_at IS NULL', [r.id, identity.id])).rowCount) fail('receipt_unavailable');
+    // A minted fish must never be listed: the buyer would pay CR for a
+    // receipt whose token the seller keeps. (The token_id check was missing
+    // entirely — a recorded mint could be listed.)
+    if (r.token_id) fail('catch_minted_onchain');
+    await assertNotMintedOnChain(r.id);
     if ((await c.query("SELECT id FROM shop_listings WHERE receipt_id=$1 AND status='active'", [r.id])).rowCount) fail('receipt_already_listed');
     const listing = (await c.query("INSERT INTO shop_listings(id,seller_id,receipt_id,species_id,price) VALUES($1,$2,$3,$4,$5) RETURNING *", [randomUUID(), identity.id, r.id, r.species_id, price])).rows[0];
     return { listingId: listing.id, receiptId: r.id, speciesId: r.species_id, price, status: 'active' };
@@ -147,6 +181,9 @@ export async function buyFromShop(db, identity, listingId, idempotencyKey) {
     const price = BigInt(listing.price);
     const r = (await c.query('SELECT * FROM catch_receipts WHERE id=$1 AND player_id=$2 FOR UPDATE', [listing.receipt_id, listing.seller_id])).rows[0];
     if (!r || r.status !== 'valid' || !(await c.query('SELECT id FROM catch_receipts WHERE id=$1 AND expires_at>clock_timestamp()', [r.id])).rowCount) fail('receipt_unavailable');
+    // Defense in depth: listings for minted fish cannot be created after
+    // the listFish fix above; refuse to sell one that predates it.
+    if (r.token_id) fail('catch_minted_onchain');
     if (!(await c.query('SELECT receipt_id FROM inventory_receipts WHERE receipt_id=$1 AND player_id=$2 AND sold_at IS NULL FOR UPDATE', [r.id, listing.seller_id])).rowCount) fail('receipt_unavailable');
     const buyerBalance = (await c.query('UPDATE player_accounts SET balance=balance-$2,version=version+1 WHERE player_id=$1 AND balance>=$2 RETURNING balance', [identity.id, listing.price])).rows[0]?.balance;
     if (buyerBalance === undefined) fail('insufficient_credits');

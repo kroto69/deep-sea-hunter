@@ -86,9 +86,10 @@ export async function receiptSignature(db, identity, receiptId) {
 // client cannot claim a token that was never minted. Already-recorded
 // receipts return idempotently without a chain call (e.g. operator
 // auto-mint wrote fish:catch-{receiptId} first).
-// Residual: this closes the hole for honest clients. A modified client could
-// skip the record call and still sell off-chain; full robustness needs an
-// on-chain ownership check inside sell() itself (not built).
+// Closed 2026-11-11: market.js assertNotMintedOnChain asks the chain
+// (receiptMintedOnChain, mt_batch_supply) inside sell(), quote() and
+// listFish(), so a skipped record call no longer enables an off-chain
+// sale. record-mint itself stays as the fast path for honest clients.
 export async function recordMint(db, identity, receiptId, viewFn = view) {
   if (!config.merchantContractId) fail('merchant_contract_not_configured', 503);
   const { rows: [r] } = await db.query(`SELECT r.id, r.status, r.expires_at, r.token_id, p.wallet_account

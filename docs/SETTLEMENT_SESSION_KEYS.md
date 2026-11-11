@@ -205,6 +205,9 @@ reports a `tokenId` — the two mint paths are mutually exclusive per
 receipt. A mint that succeeds but whose record call fails stays queued as
 `minted` in localStorage and retries only the record on next launch.
 
-Residual: this closes the hole for honest clients. A modified client could
-skip the record call and still sell off-chain; full robustness needs an
-on-chain ownership check inside `sell()` itself (not built).
+Closed 2026-11-11: `market.js` `assertNotMintedOnChain` asks the chain
+(`receiptMintedOnChain`, `mt_batch_supply` for both `fish:{receipt}` and
+`fish:catch-{receipt}`) inside `sell()`, `quote()` and `listFish()`, so a
+skipped record call no longer enables an off-chain sale. Fail-closed:
+if the chain cannot be read the sale is refused with
+`onchain_check_unavailable` (503).
