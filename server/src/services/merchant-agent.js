@@ -77,7 +77,20 @@ export async function merchantStock(tokenId) {
   return nearString((await viewM('merchant_inventory', { token_id: tokenId })).value);
 }
 
-const broke = (state, unitPrice) => !state || BigInt(state.availableTreasury) < BigInt(unitPrice);
+// One definition of "broke" for the whole on-chain merchant: the treasury
+// cannot fund the cheapest order in front of it. With no orders in front
+// of it, only an exactly-empty treasury counts as broke — otherwise a
+// merchant with funds and nothing to buy would report broke.
+export function treasuryBroke(availableTreasury, unitPrices) {
+  const available = BigInt(availableTreasury ?? 0);
+  if (!unitPrices?.length) return available === 0n;
+  let cheapest = BigInt(unitPrices[0]);
+  for (const p of unitPrices) { const v = BigInt(p); if (v < cheapest) cheapest = v; }
+  return available < cheapest;
+}
+
+// Per-order check (fail-safe for writes): unknown chain state counts as broke.
+const broke = (state, unitPrice) => !state || treasuryBroke(state.availableTreasury, [unitPrice]);
 
 // Phase 2/4: mirror one off-chain buy order (species, qty 1, price in NEAR) onto the specific token
 // that token owner holds. The contract keys orders by token, so species-level orders would never fill.
@@ -121,9 +134,12 @@ export async function agentTick(rows) {
       placed.push({ speciesId: row.species_id, tokenId: row.token_id, status: error.code || 'order_failed' });
     }
   }
-  // Broke is read from the same view the orders were checked against, so the API and the agent agree.
+  // Broke uses the same rule as ensureOrder above (treasury vs the cheapest
+  // order this tick tried to place), read from the same view — so the API,
+  // the agent, and the UI agree. Unknown chain state reports not-broke
+  // (read path: never a false alarm); the write path above stays fail-safe.
   const state = await chainState().catch(() => null);
-  return { availableTreasury: state?.availableTreasury ?? null, broke: !!state && BigInt(state.availableTreasury) === 0n, placed };
+  return { availableTreasury: state?.availableTreasury ?? null, broke: !!state && treasuryBroke(state.availableTreasury, rows.map(r => r.unitPrice)), placed };
 }
 
 export { broke };

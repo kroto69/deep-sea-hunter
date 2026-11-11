@@ -87,7 +87,7 @@ Rules the server enforces:
 - Orders are keyed per token (`order-fish:<asset>`) by the server agent (`ensureOrder` reuses one order id per token and never reopens a filled/expired one), so one order per token for life is server policy; the contract itself only enforces unique `order_id`, not one-order-per-token.
 - Price bridge is fixed at 1 CR = 0.0005 NEAR; the CR price itself stays dynamic (population, demand, stock).
 - A catch whose token has been recorded (`catch_receipts.token_id` set, by auto-mint or `record-mint`) can no longer be sold for CR; a session-key mint that skips `record-mint` leaves the fish sellable off-chain until the record lands — see `docs/SETTLEMENT_SESSION_KEYS.md` residual.
-- `ensureOrder` reports `broke` and places no order when `treasury_available` cannot cover one unit; note `agentTick`'s summary `broke` flag is only true when treasury is exactly zero, so the two disagree for a partially-funded treasury.
+- `ensureOrder` reports `broke` and places no order when `treasury_available` cannot cover one unit; `agentTick`'s summary flag and the API's `merchantBroke` use the same rule (treasury vs the cheapest order in front of it; only an empty treasury counts as broke when there are no orders). Fixed 2026-11-11 — previously `agentTick`/API used exactly-zero, disagreeing for a partially-funded treasury.
 
 ## Verification after explicit authorization
 
