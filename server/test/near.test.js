@@ -24,7 +24,7 @@ test('merchant UI transaction verification requires matching Testnet signer, rec
  if(!receiver)return;
  const base={final_execution_status:'FINAL',transaction:{hash,signer_id:signer,receiver_id:receiver,actions:[{FunctionCall:{method_name:'accept_purchase_order'}}]},status:{SuccessValue:''},receipts_outcome:[{outcome:{executor_id:receiver,status:{SuccessValue:''},logs:['EVENT_JSON:'+JSON.stringify({standard:'nep245',event:'mt_transfer'})]}}]};
  const query=async(method,params)=>{assert.equal(method,'EXPERIMENTAL_tx_status');assert.deepEqual(params,{tx_hash:hash,sender_account_id:signer,wait_until:'FINAL'});return base;};
- assert.deepEqual(await verifyMerchantTransaction(hash,signer,query),{hash,status:'final',method:'accept_purchase_order',events:[{standard:'nep245',event:'mt_transfer'}]});
+ assert.deepEqual(await verifyMerchantTransaction(hash,signer,query),{hash,status:'final',method:'accept_purchase_order',args:null,events:[{standard:'nep245',event:'mt_transfer'}]});
  assert.equal((await verifyMerchantTransaction(hash,signer,async()=>({...base,final_execution_status:'EXECUTED'}))).status,'pending');
  assert.equal((await verifyMerchantTransaction(hash,signer,async()=>({...base,receipts_outcome:[{outcome:{executor_id:receiver,status:{Failure:{error:'failed'}},logs:[]}}]}))).status,'failed');
  await assert.rejects(verifyMerchantTransaction(hash,signer,async()=>({...base,transaction:{...base.transaction,receiver_id:'other.testnet'}})),/transaction_mismatch/);

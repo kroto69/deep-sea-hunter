@@ -18,7 +18,7 @@ Low-poly underwater hunting game built with Three.js. Explore, catch fish, manag
 
 Verified Testnet sells finalized for three merchant transactions on v1 and v2, including the sale of an auto-minted catch token. This proves merchant transactions, not full NEP-245 compliance or production readiness. Local simulations and PostgreSQL balances remain off-chain.
 
-## Where the flow stands (2026-11-10)
+## Where the flow stands (2026-11-11)
 
 Flow diagram (same stages, visual): [`docs/flow-settlement-invisible.html`](docs/flow-settlement-invisible.html).
 
@@ -27,11 +27,11 @@ Flow diagram (same stages, visual): [`docs/flow-settlement-invisible.html`](docs
 | 0 Setup | BUILT | Wallet connect + verify; one-time session-key grant (AddKey) + storage deposit; operator auto-mint flag + owner key. Connecting a wallet auto-enters online play and prompts the one-time VERIFY WALLET signature once per browser session. |
 | 1 Dive & catch | BUILT | Dive, catch, server receipt in Postgres. |
 | 2 Mint | BUILT (two paths) | A: operator auto-mint — LIVE on v2 Testnet. B: session-key `mint_catch` — local only, needs a redeploy (deployed v2 has no `mint_catch`); `POST /api/near/record-mint` records the token so a tokenized fish cannot be sold off-chain for CR. One receipt mints at most once. |
-| 3 Sell to merchant (CR) | BUILT (off-chain) | CR sale with `catch_minted_onchain` + `receipt_listed` guards. On-chain transfer leg (token moves with the sale) NOT built. |
-| 4 Player shops | BUILT | License/list/buy/delist endpoints + escrow + supply-aware pricing + Hub UI (SHOPS tab, 2026-11-07: license, list at own price, delist, buy, market board). On-chain settlement of shop sales NOT built (transfer leg, slice 3). |
+| 3 Sell to merchant (CR) | BUILT (off-chain) | CR sale with `catch_minted_onchain` + `receipt_listed` guards. On-chain transfer leg: determined MOOT 2026-11-11 — an unminted fish has no token to transfer, a minted fish cannot be CR-sold at all, and its only sale (on-chain `accept_purchase_order`) already moves the token atomically. What slice 3 owed instead, the settlement hash in trade history, IS built: `POST /api/merchant-chain/settlements` records the verified `accept_purchase_order` hash linked to the receipt. |
+| 4 Player shops | BUILT | License/list/buy/delist endpoints + escrow + supply-aware pricing + Hub UI (SHOPS tab, 2026-11-07: license, list at own price, delist, buy, market board). On-chain settlement of shop sales: no token transfer is owed — minted fish cannot be listed, so shop sales never move a token (slice 3 decision, 2026-11-11). |
 | 5 NEAR-tab token sell | BUILT (Testnet) | `accept_purchase_order` verified FINAL on v1 + v2. |
 | 6 Tick + Fast Forward | BUILT | 60 s market tick; Fast Forward simulates 7 days in 1 minute, local only. |
-| 7 Withdraw CR → NEAR | NOT BUILT (CR→NEAR flow) | Rate exists in code (1 CR = 0.0005 NEAR, agent conversion); the CR→NEAR conversion flow + funding source are undecided. The NEAR tab already has a WITHDRAW NEAR button that pays an existing on-chain seller claim via `withdraw_proceeds` — verified 2026-11-07 on v2 Testnet (withdraw tx `CQ8eSUfjDhjEuRnFnsnFfj3rCA4ucD4P9SfC6Sxc3mWu`, 0.009 NEAR to `flatrice4664.testnet`; sale tx `2er8mzfvHt7k5Se3QV5ub7TyqvSHFtFooTpfTPCSvDoH`). |
+| 7 Withdraw CR → NEAR | BUILT (local, operator-funded) | `POST /api/near/withdraw-cr` + NEAR-tab form: debit CR (100–10,000 per call) at the fixed bridge 1 CR = 0.0005 NEAR, send NEAR from the operator's owner account to the player's verified wallet, refund on send failure, resume by idempotency key, never re-send an attempted payout. Funding decision (2026-11-11): the contract treasury cannot pay arbitrary amounts and the server holds no treasury key — the owner account is the only source; the operator funds it manually. Not verified on Testnet. The NEAR tab already has a WITHDRAW NEAR button that pays an existing on-chain seller claim via `withdraw_proceeds` — verified 2026-11-07 on v2 Testnet (withdraw tx `CQ8eSUfjDhjEuRnFnsnFfj3rCA4ucD4P9SfC6Sxc3mWu`, 0.009 NEAR to `flatrice4664.testnet`; sale tx `2er8mzfvHt7k5Se3QV5ub7TyqvSHFtFooTpfTPCSvDoH`). |
 
 Background music: "Deep Ocean" by MeditationSpiritual (Pixabay, royalty-free), bundled as `audio/deep-ocean.mp3` (6:44, 128 kbps, ~6 MB — compressed from the 256 kbps / ~12 MB original), looped at 60% volume, starts on the first click; MUSIC ON/OFF button under WALLET. The static site serves it (`render.yaml` copies `audio/` to `dist/`).
 

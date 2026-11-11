@@ -1,9 +1,11 @@
 # Settlement session keys — invisible on-chain settlement
 
-Status: SLICES 1–2 IMPLEMENTED LOCALLY (2026-11-07). Not deployed, not
-verified on Testnet. Slice 2 added the server receipt-signing endpoint and
-the catch → mint wiring; the sell/buy transfer leg and the withdrawal flow
-are still missing.
+Status: SLICES 1–2 IMPLEMENTED LOCALLY (2026-11-07). Slice 3 decided and
+partially built 2026-11-11: the settlement-hash record in trade history
+and the CR → NEAR withdrawal are built (local, stub-RPC-tested); the
+mt_transfer queue was determined moot under the double-sell guard and
+was NOT built — see "Slice 3 decision" below. Not deployed, not
+verified on Testnet.
 
 ## The requirement (owner, 2026-11-07)
 
@@ -108,11 +110,61 @@ never blocked on settlement), so a missed settlement is a missing receipt,
 not lost funds — but it must be visible in the trade history as "settlement
 pending" rather than silently dropped.
 
-### Withdrawal (not built)
+### Withdrawal (built 2026-11-11, local only)
 
 The only moment the player "meets" the chain on purpose: one wallet approval,
 CR is locked/burned off-chain, NEAR is paid from the game/merchant treasury.
 Needs two decisions first: the CR→NEAR rate, and which treasury funds it.
+
+DECIDED 2026-11-11 — both questions, from code evidence
+(`server/src/services/withdraw.js` header carries the full reasoning):
+- Rate: the fixed bridge, 1 CR = 0.0005 NEAR (`crToYocto`, ticks.js).
+  100–10,000 CR per call.
+- Funding: the OPERATOR'S OWNER ACCOUNT (`NEAR_MERCHANT_OWNER_ID`).
+  The contract's native_treasury cannot pay an arbitrary amount to an
+  arbitrary account — no such method exists; `withdraw_proceeds` only
+  pays the caller's own seller claim, and the server cannot call it for
+  the player. The treasury_id account's key is not held by the server.
+  The game treasury holds CR only, never NEAR. So every withdrawal
+  drains the operator's owner account: the operator funds that account
+  manually, the payout is capped per call, and the owner balance is
+  checked (payout + 0.1 NEAR reserve) before any CR is debited.
+- Safety shape: debit CR + balanced ledger + 'pending' row commit first;
+  then mark the attempt, send the NEAR, mark 'paid' with the tx hash —
+  or refund the CR and mark 'failed'. Same idempotency key resumes a
+  pending row; a row whose send was attempted but whose outcome was lost
+  is never re-sent and goes to 'needs_review'. A failed send never costs
+  the player CR; a lost outcome never double-pays.
+- Endpoint: `POST /api/near/withdraw-cr {amountCr}` (+ `GET
+  /api/near/withdrawals`); NEAR-tab form in `js/online.js`.
+  Fail-closed: 503 when the merchant contract / owner / chain is
+  unavailable, 409 when the owner account cannot fund the payout.
+  Not verified on Testnet: the send is server-signed with the owner key,
+  so the first live run must be a small amount with the operator watching.
+
+### Slice 3 decision — the mt_transfer queue is moot (2026-11-11)
+
+The planned "after a CR sale commits, move the token with `mt_transfer`
+via the session key, queueing until the seller next opens the game"
+was NOT built, deliberately. Under the double-sell guard (117207a) there
+is no case left where a token transfer is owed after a sale:
+- An unminted fish sold for CR has no token to transfer.
+- A minted fish cannot be sold for CR at all — its only sale is the
+  wallet-signed `accept_purchase_order`, which moves the token to the
+  merchant desk atomically in the same transaction.
+- Shop sales are the same: minted fish cannot be listed, so a shop sale
+  never moves a token.
+Building the queue would have meant either reversing the guard or
+inventing a transfer for a token that does not exist. What slice 3 still
+owed was the visible part, and that IS built: `POST
+/api/merchant-chain/settlements` records the verified
+`accept_purchase_order` hash linked to the receipt (order_id in the
+decoded call args must match `order-fish:{receipt}` /
+`order-fish:catch-{receipt}`; legacy demo order `order-1` is the one
+carve-out), `GET /api/chain/transactions` serves it with the species
+name, the NEAR tab shows it, and `reconcile()` now dispatches on the
+recorded contract instead of wrongly marking merchant hashes failed
+(the collectibles receiver check used to fail every merchant hash).
 
 ## What the session key CANNOT do
 
@@ -178,14 +230,19 @@ Honest limits of "the user never notices" (do not oversell this):
 
 Remains (do not claim the loop is live):
 
-1. Wiring the SELL/BUY transfer leg: after a CR sale commits, move the
-   token to the merchant (or the buyer, for shop sales) with `mt_transfer`
-   via the session key, and show the settlement hash / pending state in the
-   trade history UI. Slice 2 only mints at catch time.
+1. Wiring the SELL/BUY transfer leg: DECIDED 2026-11-11 — the
+   `mt_transfer` queue is moot (see "Slice 3 decision" above) and was
+   not built. What was built instead: the settlement hash in trade
+   history (`POST /api/merchant-chain/settlements`, `GET
+   /api/chain/transactions`, NEAR-tab list) — after a CR sale commits,
+   there is no token to move; after an on-chain sale, the hash is
+   recorded with the fish it settled.
 2. Testnet verification: AddKey via Meteor/MyNearWallet/HERE (support varies
    by wallet), the 1-yocto rule for function-call keys, allowance burn rate,
    and one real end-to-end settlement.
-3. Withdrawal flow (rate + funding treasury decisions).
+3. Withdrawal flow: BUILT 2026-11-11 (see "Withdrawal" above) — still
+   needs its first live run: a small amount, operator watching, owner
+   account funded.
 4. Redeploy of the merchant contract (new struct fields) — needs approval
    and the Borsh check. (The `storage_balance_of` `{id}` → `{account_id}`
    server change is already done: the server sends `{account_id}`, matching

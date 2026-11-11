@@ -60,9 +60,32 @@ export async function view(method,args,contractId=config.nearContractId){
   const result=await rpc('query',{request_type:'call_function',finality:'final',account_id:contractId,method_name:method,args_base64:Buffer.from(JSON.stringify(args)).toString('base64')});
   return {blockHash:result.block_hash,blockHeight:result.block_height,value:JSON.parse(Buffer.from(result.result).toString())};
 }
+// Native NEAR balance of an account, in yocto (BigInt), via view_account.
+// The withdrawal flow checks the operator's payout account with this
+// before debiting CR. query is injectable for tests, same as bindWallet.
+export async function accountBalance(accountId, query = rpc) {
+  const result = await query('query', { request_type: 'view_account', finality: 'final', account_id: accountId });
+  return BigInt(result.amount ?? 0);
+}
 export async function reconcile(db,row,query=rpc){
   const saved=(await db.query('SELECT status FROM chain_transactions WHERE hash=$1',[row.hash])).rows[0];
   if(saved&&saved.status!=='pending')return {status:saved.status};
+  // Merchant-contract settlements (recorded by recordSettlement) are
+  // verified with verifyMerchantTransaction, not the collectibles check
+  // below: their receiver is the merchant contract, so the old code
+  // marked every merchant hash 'failed' with transaction_mismatch.
+  // Legacy rows without contract_id keep the collectibles path.
+  if (row.contract_id && row.contract_id === config.merchantContractId) {
+    try {
+      const v = await verifyMerchantTransaction(row.hash, row.signer_id, query);
+      await db.query("UPDATE chain_transactions SET status=$2,checked_at=clock_timestamp(),last_error=$3 WHERE hash=$1", [row.hash, v.status, v.status === 'failed' ? JSON.stringify(v.error ?? 'receipt_failed') : null]);
+      return { status: v.status, method: v.method };
+    } catch (e) {
+      const terminal = e.code === 'transaction_mismatch' || e.code === 'transaction_method_not_supported';
+      await db.query("UPDATE chain_transactions SET checked_at=clock_timestamp(),last_error=$2,status=$3 WHERE hash=$1 AND status='pending'", [row.hash, e.code || 'rpc_timeout', terminal ? 'failed' : 'pending']);
+      return { status: terminal ? 'failed' : 'pending', error: e.code || 'rpc_timeout' };
+    }
+  }
   try{
     const result=await query('EXPERIMENTAL_tx_status',{tx_hash:row.hash,sender_account_id:row.signer_id,wait_until:'FINAL'});
     if(result.final_execution_status!=='FINAL')return {status:'pending'};
@@ -92,15 +115,23 @@ export async function verifyMerchantTransaction(hash,signer,query=rpc){
   const action=tx.actions?.length===1?tx.actions[0].FunctionCall:null;
   const allowed=['storage_deposit','accept_purchase_order','withdraw_proceeds'];
   if(!action||!allowed.includes(action.method_name))fail('transaction_method_not_supported',400);
-  if(result.final_execution_status!=='FINAL')return {hash,status:'pending',method:action.method_name};
+  // Decoded call args, so recordSettlement can prove the tx settled THIS
+  // receipt's token (order_id order-fish:{receipt} /
+  // order-fish:catch-{receipt}). Null when the call carried no JSON args.
+  let args=null;try{args=action.args?JSON.parse(Buffer.from(action.args,'base64').toString()):null;}catch{args=null;}
+  if(result.final_execution_status!=='FINAL')return {hash,status:'pending',method:action.method_name,args};
   const contractReceipts=(result.receipts_outcome||[]).filter(r=>r.outcome.executor_id===config.merchantContractId);
   const success=Object.hasOwn(result.status||{},'SuccessValue')&&contractReceipts.length>0&&
     contractReceipts.every(r=>Object.hasOwn(r.outcome.status||{},'SuccessValue'));
   const events=(result.receipts_outcome||[]).filter(r=>r.outcome.executor_id===config.merchantContractId&&Object.hasOwn(r.outcome.status||{},'SuccessValue')).flatMap(r=>(r.outcome.logs||[]).filter(log=>log.startsWith('EVENT_JSON:')).map(log=>{try{return JSON.parse(log.slice(11));}catch{return null;}})).filter(Boolean);
-  return success?{hash,status:'final',method:action.method_name,events}:{hash,status:'failed',method:action.method_name,events,error:result.status?.Failure||'receipt_failed'};
+  return success?{hash,status:'final',method:action.method_name,args,events}:{hash,status:'failed',method:action.method_name,args,events,error:result.status?.Failure||'receipt_failed'};
 }
 export async function reconcilePending(db){
-  if(!config.nearContractId)return;
+  // Bail only when NO contract is configured at all: merchant settlements
+  // (recordSettlement) must reconcile even when the collectibles contract
+  // is unset — the old guard on nearContractId alone silently skipped
+  // every merchant row on such a deployment.
+  if(!config.nearContractId && !config.merchantContractId)return;
   const rows=(await db.query("SELECT * FROM chain_transactions WHERE status='pending' AND (checked_at IS NULL OR checked_at<clock_timestamp()-interval '30 seconds') ORDER BY checked_at NULLS FIRST,created_at LIMIT 10")).rows;
   await Promise.all(rows.map(row=>reconcile(db,row)));
 }

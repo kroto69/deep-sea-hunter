@@ -1,6 +1,7 @@
 import { config } from '../config/env.js';
 import { challenge,bindWallet,view,reconcile,verifyMerchantTransaction } from '../services/near.js';
-import { receiptSignature, recordMint, settlementPublicKey } from '../services/settlement.js';
+import { receiptSignature, recordMint, settlementPublicKey, recordSettlement } from '../services/settlement.js';
+import { withdrawCr, listWithdrawals } from '../services/withdraw.js';
 import { fail } from '../services/transaction.js';
 import { chainState, signerAvailable, merchantBrokeFor } from '../services/merchant-agent.js';
 const text=(max=100)=>({type:'string',minLength:1,maxLength:max});
@@ -35,6 +36,16 @@ export async function nearRoutes(app){
  // After the browser mints via mint_catch, record the token on the receipt
  // so the off-chain CR sale refuses a tokenized fish (see settlement.js).
  app.post('/api/near/record-mint',{...auth,schema:{body:body({receiptId:uuid})}},r=>recordMint(app.pg,r.player,r.body.receiptId));
+ // Slice 3: after a wallet-signed accept_purchase_order, record the
+ // settlement hash linked to the fish it settles, so trade history shows
+ // the on-chain sale (see settlement.js recordSettlement — no mt_transfer
+ // queue: under the double-sell guard no transfer is ever owed).
+ app.post('/api/merchant-chain/settlements',{...auth,schema:{body:body({hash:{type:'string',pattern:'^[1-9A-HJ-NP-Za-km-z]{43,44}$'},receiptId:uuid})}},r=>recordSettlement(app.pg,r.player,r.body.hash,r.body.receiptId));
+ // CR -> NEAR withdrawal (see withdraw.js for the funding decision: the
+ // NEAR comes from the operator's owner account). The CR is debited only
+ // after the owner balance is checked; a failed send refunds the CR.
+ app.post('/api/near/withdraw-cr',{...auth,schema:{body:body({amountCr:{type:'integer',minimum:100,maximum:10000}})}},r=>withdrawCr(app.pg,r.player,r.body.amountCr,r.headers['idempotency-key']));
+ app.get('/api/near/withdrawals',auth,async r=>listWithdrawals(app.pg,r.player.id));
  app.get('/api/merchant-chain/transactions/:hash',{schema:{params:body({hash:{type:'string',pattern:'^[1-9A-HJ-NP-Za-km-z]{43,44}$'}}),querystring:body({accountId:{type:'string',pattern:'^[a-z0-9][a-z0-9_.-]{0,62}[a-z0-9]$'}})}},async r=>{
    if(!config.merchantContractId)fail('merchant_contract_not_configured',503);
    return verifyMerchantTransaction(r.params.hash,r.query.accountId);
@@ -46,10 +57,10 @@ export async function nearRoutes(app){
    if(!config.nearContractId)fail('contract_not_configured',503);
    const p=(await app.pg.query('SELECT wallet_account FROM players WHERE id=$1',[r.player.id])).rows[0];
    if(!p.wallet_account)fail('wallet_not_verified',401);
-   await app.pg.query('INSERT INTO chain_transactions(hash,player_id,signer_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[r.body.hash,r.player.id,p.wallet_account]);
+   await app.pg.query('INSERT INTO chain_transactions(hash,player_id,signer_id,contract_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING',[r.body.hash,r.player.id,p.wallet_account,config.nearContractId]);
    const row=(await app.pg.query('SELECT * FROM chain_transactions WHERE hash=$1 AND player_id=$2',[r.body.hash,r.player.id])).rows[0];
    if(!row)fail('transaction_not_found',404);return reconcile(app.pg,row);
  });
- app.get('/api/chain/transactions',auth,async r=>(await app.pg.query('SELECT * FROM chain_transactions WHERE player_id=$1 ORDER BY created_at DESC LIMIT 50',[r.player.id])).rows);
+ app.get('/api/chain/transactions',auth,async r=>(await app.pg.query(`SELECT t.*,r.species_id,s.name AS species_name FROM chain_transactions t LEFT JOIN catch_receipts r ON r.id=t.receipt_id LEFT JOIN species s ON s.id=r.species_id WHERE t.player_id=$1 ORDER BY t.created_at DESC LIMIT 50`,[r.player.id])).rows);
  app.get('/api/collectibles/:id',{...auth,schema:{params:body({id:text(64)})}},async r=>({token:await view('nft_token',{token_id:r.params.id}),listing:await view('listing',{token_id:r.params.id})}));
 }

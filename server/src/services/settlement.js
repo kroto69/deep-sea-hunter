@@ -15,7 +15,7 @@
 // reads config.settlementSigningKey at call time.
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { fail } from './transaction.js';
-import { view } from './near.js';
+import { view, verifyMerchantTransaction } from './near.js';
 import { config } from '../config/env.js';
 
 export const SETTLEMENT_MSG_DOMAIN = 'dsh-catch-v1';
@@ -108,4 +108,59 @@ export async function recordMint(db, identity, receiptId, viewFn = view) {
     return { receiptId: r.id, tokenId: again?.token_id || tokenId, recorded: false };
   }
   return { receiptId: r.id, tokenId, recorded: true };
+}
+
+// POST /api/merchant-chain/settlements — record an on-chain merchant sale
+// (accept_purchase_order, wallet-signed in the NEAR tab) in trade history.
+//
+// Why this exists instead of an mt_transfer queue (slice 3, see
+// docs/SETTLEMENT_SESSION_KEYS.md): a transfer leg after a sale is moot
+// under the double-sell guard. An unminted fish sold for CR has no token
+// to transfer; a minted fish cannot be sold for CR at all — its only sale
+// is the on-chain accept_purchase_order, which moves the token to the
+// merchant desk atomically in the same transaction. Shop sales are the
+// same: minted fish cannot be listed, so a shop sale never has a token to
+// move. There is no case left where a token transfer is owed after a
+// sale, and no queue to drain — building one would mean either reversing
+// the guard or inventing a transfer for a token that does not exist.
+// What slice 3 still owed was the visible part: the settlement hash,
+// linked to the fish it settles, in trade history. That is what this
+// records.
+//
+// The hash is verified before it is stored (same verifyMerchantTransaction
+// the UI uses): the signer must be the caller's verified wallet, the
+// receiver the merchant contract, the method accept_purchase_order. The
+// decoded call args bind the tx to THIS receipt's token — the merchant
+// keys orders by token (order-fish:{receipt} for session-key mints,
+// order-fish:catch-{receipt} for operator auto-mints); the legacy demo
+// order 'order-1' has no receipt binding by construction and is the one
+// carve-out. A 'pending' (not yet final) settlement is recorded too, with
+// its pending state visible; reconcilePending() re-checks it in the
+// background and flips it to final/failed. A failed settlement is
+// refused. Recording is idempotent for the same hash + receipt.
+export async function recordSettlement(db, identity, hash, receiptId, { verifyFn = verifyMerchantTransaction } = {}) {
+  if (!config.merchantContractId) fail('merchant_contract_not_configured', 503);
+  const { rows: [r] } = await db.query(`SELECT r.id, p.wallet_account
+    FROM catch_receipts r JOIN players p ON p.id = r.player_id
+    WHERE r.id = $1 AND r.player_id = $2`, [receiptId, identity.id]);
+  if (!r) fail('receipt_not_found', 404);
+  if (!r.wallet_account) fail('wallet_not_verified', 401);
+  const v = await verifyFn(hash, r.wallet_account);
+  if (v.method !== 'accept_purchase_order') fail('settlement_method_not_supported', 409);
+  if (v.status === 'failed') fail('settlement_failed', 409);
+  const orderId = v.args?.order_id;
+  if (orderId && orderId !== 'order-1' && orderId !== `order-fish:${receiptId}` && orderId !== `order-fish:catch-${receiptId}`) fail('settlement_receipt_mismatch', 409);
+  const { rows } = await db.query(`INSERT INTO chain_transactions(hash, player_id, signer_id, receipt_id, method, contract_id, status)
+    VALUES($1,$2,$3,$4,'accept_purchase_order',$5,$6)
+    ON CONFLICT (hash) DO UPDATE SET receipt_id = EXCLUDED.receipt_id, method = EXCLUDED.method, contract_id = EXCLUDED.contract_id,
+      status = CASE WHEN chain_transactions.status = 'final' THEN chain_transactions.status ELSE EXCLUDED.status END
+    WHERE chain_transactions.player_id = EXCLUDED.player_id AND (chain_transactions.receipt_id IS NULL OR chain_transactions.receipt_id = EXCLUDED.receipt_id)
+    RETURNING hash, player_id, signer_id, receipt_id, method, contract_id, status, created_at`,
+    [hash, identity.id, r.wallet_account, receiptId, config.merchantContractId, v.status]);
+  if (!rows.length) {
+    const { rows: [existing] } = await db.query('SELECT player_id, receipt_id FROM chain_transactions WHERE hash=$1', [hash]);
+    if (existing && existing.player_id !== identity.id) fail('settlement_belongs_to_other_player', 409);
+    fail('settlement_receipt_mismatch', 409);
+  }
+  return rows[0];
 }

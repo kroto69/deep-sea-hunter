@@ -229,6 +229,15 @@ export class OnlineGame {
       if(action==='shop-mint')throw new Error('Mint disabled until online catch receipts can authorize minting.');
       if(action==='shop-sell'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);const t=this.onchain.tokens.find(x=>x.tokenId===id);if(!t?.order)throw new Error('No merchant order for this fish');await this.shopCall('accept_purchase_order',{order_id:t.order.id,amount:'1'});}
       if(action==='shop-withdraw'){await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);if(BigInt(this.onchain.sellerClaim||0)<=0n)throw new Error('No on-chain proceeds to withdraw');await this.shopCall('withdraw_proceeds',{});}
+      if(action==='shop-withdraw-cr'){
+        const input=this.hub.body.querySelector('[data-withdraw-amount]');
+        const amountCr=Number(input?.value);
+        if(!Number.isSafeInteger(amountCr)||amountCr<100||amountCr>10000)throw new Error('Withdrawal is 100–10,000 CR');
+        const r=await this.post('/api/near/withdraw-cr',{amountCr});
+        await this.shopLoad();await this.refresh();
+        this.notice=r.status==='paid'?`WITHDREW ${r.amount_cr} CR → NEAR · PAID · ${String(r.tx_hash||'').slice(0,10)}…`:`WITHDRAWAL ${r.status.toUpperCase()} · ${r.status==='failed'?'CR refunded — try again':r.error||r.status}`;
+        this.hud.notify(this.notice);
+      }
       if(action==='shop-license'){const r=await this.post('/api/market/shops/license',{});await this.loadShops();await this.refresh();this.notice=`BOAT STALL LICENSED · ${r.price} CR`;this.hud.notify(this.notice);}
       if(action==='shop-list'){
         const input=this.hub.body.querySelector(`[data-price-for="${id}"]`);
@@ -275,6 +284,10 @@ export class OnlineGame {
     this.onchain={...this.onchain,error:''};
     try{this.walletId=await walletAccount();if(!this.walletId)throw new Error('Connect Testnet wallet first');Object.assign(this.onchain,await this.api(`/api/merchant-chain/state/${this.walletId}`));}
     catch(error){this.onchain.error=error.message;}
+    // On-chain settlements + CR->NEAR withdrawals for the NEAR tab.
+    // Fail-soft: the tab still renders without them.
+    try{this.chainHistory=await this.api('/api/chain/transactions');}catch{this.chainHistory=[];}
+    try{this.withdrawals=await this.api('/api/near/withdrawals');}catch{this.withdrawals=[];}
   }
   async verifyMerchantTx(hash){
     const result=await this.api(`/api/merchant-chain/transactions/${encodeURIComponent(hash)}?accountId=${encodeURIComponent(this.walletId||await walletAccount())}`);
@@ -293,6 +306,15 @@ export class OnlineGame {
     if(!hash)throw new Error('Wallet returned no transaction hash; inspect wallet history before retrying');
     c.lastTx={method:methodName,hash,status:'pending'};this.onchain=c;this.render();
     const verification=await this.verifyMerchantTx(hash);if(verification.status==='failed')throw new Error(`${methodName} failed final on-chain: ${JSON.stringify(verification.error).slice(0,200)}`);
+    // Slice 3: record the on-chain sale in trade history, linked to the
+    // fish it settled. Best-effort — the sale already happened on-chain,
+    // so a recording failure must never fail the sell itself. The
+    // merchant keys orders by token (order-fish:{receipt} /
+    // order-fish:catch-{receipt}); the legacy demo order has no receipt.
+    if(methodName==='accept_purchase_order'){
+      const token=(args.order_id||'').replace(/^order-/,'').replace(/^fish:/,'').replace(/^catch-/,'');
+      if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token))this.post('/api/merchant-chain/settlements',{hash,receiptId:token}).catch(()=>{});
+    }
     await this.shopLoad();if(this.onchain.error)throw new Error(this.onchain.error);this.notice=`${methodName} · ${verification.status==='final'?'FINAL':'PENDING FINALITY'} · ${hash.slice(0,10)}…`;this.hud.notify(this.notice);
   }
   render(){
@@ -388,6 +410,11 @@ export class OnlineGame {
         html+=`<div class="market-metrics"><div><small>FISH TOKENS</small><strong>${c.tokens.length}</strong></div><div><small>SALE PROCEEDS</small><strong>${near(c.sellerClaim)} <em>NEAR</em></strong></div><div><small>STORAGE DEPOSIT</small><strong>${near(c.storage?.total)} <em>NEAR</em></strong></div></div>`;
         html+=c.tokens.map(t=>`<div class="market-row"><div class="market-species"><b>${esc(t.title)}</b><small>${esc(t.tokenId)}</small></div><div class="market-price"><b>${t.order?`${near(t.order.unitPrice)} NEAR`:'—'}</b><small>${t.order?'merchant order':'no order'}</small></div>${t.order&&!lowStorage?button('shop-sell','SELL · ON-CHAIN',t.tokenId):`<span class="order-state">${t.order?'NEED STORAGE':'WAITING'}</span>`}</div>`).join('')||'<p class="market-empty">No fish tokens on this account.</p>';
         html+=`<div class="hub-quick">${button('shop-refresh','SYNC ON-CHAIN')}${lowStorage?button('shop-storage',`STORAGE DEPOSIT ${near(BigInt(SELLER_STORAGE)-BigInt(c.storage?.total||0))} NEAR`):''}${lowStorage?'':!this.active?'<p class="hub-note">Play online to auto-mint catches to this wallet.</p>':!this.profile?.wallet_account?button('verify','VERIFY WALLET · ENABLE AUTO-MINT'):'<p class="hub-note">Auto-mint on: each validated catch mints to this wallet, no popup.</p>'}${this.settlementLine(c,esc,button)}${c.sellerClaim!=='0'?button('shop-withdraw','WITHDRAW NEAR'):''}</div>`;
+        html+=`<div class="market-section-title"><h3>Withdraw CR → NEAR</h3></div><p class="hub-note">Convert game credits to NEAR at 1 CR = 0.0005 NEAR, paid from the operator's account to your verified wallet. 100–10,000 CR per withdrawal. Your CR balance: ${esc(this.profile?.balance??0)} CR.</p><div class="hub-quick"><input class="sell-qty" type="number" min="100" max="10000" step="100" value="1000" data-withdraw-amount aria-label="CR to withdraw">${button('shop-withdraw-cr','WITHDRAW CR → NEAR')}</div>`;
+        const settlements=(this.chainHistory||[]).filter(t=>t.receipt_id);
+        if(settlements.length)html+=`<div class="market-section-title"><h3>On-chain settlements</h3></div>${settlements.map(t=>`<div class="history-row"><span>${esc(t.species_name||'Fish sale')}<small>${esc(new Date(t.created_at).toLocaleString())} · ${esc(t.status)} · ${esc(t.method||'')}</small></span><b>${link(t.hash)}</b></div>`).join('')}`;
+        const wds=this.withdrawals||[];
+        if(wds.length)html+=`<div class="market-section-title"><h3>CR → NEAR withdrawals</h3></div>${wds.map(w=>`<div class="history-row"><span>${esc(w.amount_cr)} CR → ${near(BigInt(w.amount_yocto))} NEAR<small>${esc(new Date(w.created_at).toLocaleString())} · ${esc(w.status)}${w.error?` · ${esc(w.error)}`:''}</small></span><b>${w.tx_hash?link(w.tx_hash):esc(w.status)}</b></div>`).join('')}`;
       }
       if(tx)html+=`<p class="hub-note">LAST TX · ${esc(tx.method)} · ${tx.status==='final'?'FINAL':tx.status==='failed'?'FAILED FINAL':tx.status==='pending'?'PENDING FINALITY':tx.ok?'SUBMITTED · FINALITY UNVERIFIED':'WALLET REPORTED FAILURE'} · ${link(tx.hash)}</p>${tx.status!=='final'&&tx.status!=='failed'?button('shop-verify','VERIFY LAST TX'):''}`;
       if(c.contractId&&c.error)html+=`<p class="market-feedback is-error">${esc(c.error)}</p>`;

@@ -42,6 +42,26 @@ async function call(methodName, args, { deposit = '1', gas = 100_000_000_000_000
 
 const viewM = (method, args) => view(method, args, config.merchantContractId);
 
+// Plain NEAR transfer from the operator's owner account (the only account
+// this server can sign from — see withdraw.js for why the payout source
+// is the owner account and not the contract treasury). Used by the
+// CR -> NEAR withdrawal flow. Returns the transaction hash. Throws
+// merchant_signer_unavailable when the owner key is not on this machine,
+// merchant_tx_failed when the chain rejects the transfer.
+// Never call this from a unit test on a machine that holds a real owner
+// key: it moves real NEAR. Tests inject a fake send instead.
+export async function sendNear(to, amountYocto) {
+  const s = await signer();
+  if (!s) throw Object.assign(new Error('merchant_signer_unavailable'), { code: 'merchant_signer_unavailable' });
+  const account = await s.near.account(s.accountId);
+  const outcome = await account.sendMoney(to, BigInt(amountYocto));
+  const status = outcome.status || {};
+  if (status.Failure) throw Object.assign(new Error('merchant_tx_failed'), { code: 'merchant_tx_failed', detail: status.Failure });
+  const hash = outcome.transaction_outcome?.id || outcome.transaction?.hash;
+  if (!hash) throw Object.assign(new Error('merchant_tx_unhashed'), { code: 'merchant_tx_unhashed' });
+  return hash;
+}
+
 export async function chainState(accountId) {
   if (!config.merchantContractId) return null;
   const [merchant, treasury, reserved, liabilities, claim] = await Promise.all([
