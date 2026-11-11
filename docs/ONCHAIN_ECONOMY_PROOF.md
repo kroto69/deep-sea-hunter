@@ -30,7 +30,7 @@ This verifies one actual Testnet storage deposit and one successful merchant sal
 
 ## Merchant v2 Testnet flow
 
-Contract `dsh-merchant-v2.deepfish-owner.testnet`. Final `view_code` at block `276598575`: NEAR code hash `8PjySGU8MWsvciY2DjKGwabi2tdhWYo51MkyDKyNZboz`, SHA-256 `6dd52d1115cf4134958854e679c2e685a0949de17f6421e29034e1e09f43703d`. That matched local `contracts/merchant/target/wasm32-unknown-unknown/release/deepfish_merchant_economy.wasm` byte for byte at deploy time (cargo build, no `wasm-opt`). The current local build differs — SHA-256 `86fbc4ad…` (rebuilt 2026-11-07, includes `mint_catch`) — so the match is historical, not current.
+Contract `dsh-merchant-v2.deepfish-owner.testnet`. Final `view_code` at block `276598575`: NEAR code hash `8PjySGU8MWsvciY2DjKGwabi2tdhWYo51MkyDKyNZboz`, SHA-256 `6dd52d1115cf4134958854e679c2e685a0949de17f6421e29034e1e09f43703d`. That matched local `contracts/merchant/target/wasm32-unknown-unknown/release/deepfish_merchant_economy.wasm` byte for byte at deploy time (cargo build, no `wasm-opt`). The current local build differs — SHA-256 `fdaa8915…` (rebuilt 2026-11-10, includes `mint_catch` + order relist) — so the match is historical, not current.
 
 | Step | Transaction | Result |
 |---|---|---|
