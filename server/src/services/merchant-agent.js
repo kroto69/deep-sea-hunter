@@ -77,16 +77,43 @@ export async function merchantStock(tokenId) {
   return nearString((await viewM('merchant_inventory', { token_id: tokenId })).value);
 }
 
+// The cheapest order the agent can ever place: PRICE_LIMITS.min is 1 CR
+// (js/economy-rules.js) and the bridge is fixed at 1 CR = 0.0005 NEAR
+// (crToYocto in ticks.js). Must stay equal to crToYocto(1) — pinned by
+// test, not by import: ticks.js imports this module, so importing back
+// would be a cycle. Assumes the deployed max_trade is at least 1 CR
+// (deploy script sets 1000 NEAR); the clamp in ensureOrder can only
+// lower a price toward max_trade, never below this floor in practice.
+export const MIN_ORDER_YOCTO = 5n * 10n ** 20n;
+
 // One definition of "broke" for the whole on-chain merchant: the treasury
 // cannot fund the cheapest order in front of it. With no orders in front
-// of it, only an exactly-empty treasury counts as broke — otherwise a
-// merchant with funds and nothing to buy would report broke.
+// of it, the treasury is broke when it cannot fund even the cheapest
+// possible order (MIN_ORDER_YOCTO) — a 1-yocto treasury is broke, not
+// "not broke", because it cannot buy anything.
+// NOTE on scope: the RULE is one, but the ORDER SET is scoped per caller —
+// agentTick compares against this tick's wanted orders (global, at most
+// 25), the API compares against this player's sellable orders, ensureOrder
+// against the single order it places. The same treasury can therefore read
+// broke in one place and not-broke in another; that is the flag answering
+// different questions, not a disagreement about the rule.
 export function treasuryBroke(availableTreasury, unitPrices) {
   const available = BigInt(availableTreasury ?? 0);
-  if (!unitPrices?.length) return available === 0n;
+  if (!unitPrices?.length) return available < MIN_ORDER_YOCTO;
   let cheapest = BigInt(unitPrices[0]);
   for (const p of unitPrices) { const v = BigInt(p); if (v < cheapest) cheapest = v; }
   return available < cheapest;
+}
+
+// Pure summary of one tick's broke state, for the agent and for tests.
+export function tickSummary(state, rows) {
+  return { availableTreasury: state?.availableTreasury ?? null, broke: !!state && treasuryBroke(state.availableTreasury, rows.map(r => r.unitPrice)) };
+}
+
+// Pure API answer for one player: broke relative to THEIR sellable orders.
+// Unknown chain state reports not-broke (read path: never a false alarm).
+export function merchantBrokeFor(agent, unitPrices) {
+  return !!agent && treasuryBroke(agent.availableTreasury, unitPrices);
 }
 
 // Per-order check (fail-safe for writes): unknown chain state counts as broke.
@@ -136,10 +163,11 @@ export async function agentTick(rows) {
   }
   // Broke uses the same rule as ensureOrder above (treasury vs the cheapest
   // order this tick tried to place), read from the same view — so the API,
-  // the agent, and the UI agree. Unknown chain state reports not-broke
+  // the agent, and the UI agree on the RULE (the order sets differ by
+  // scope, see treasuryBroke). Unknown chain state reports not-broke
   // (read path: never a false alarm); the write path above stays fail-safe.
   const state = await chainState().catch(() => null);
-  return { availableTreasury: state?.availableTreasury ?? null, broke: !!state && treasuryBroke(state.availableTreasury, rows.map(r => r.unitPrice)), placed };
+  return { ...tickSummary(state, rows), placed };
 }
 
 export { broke };

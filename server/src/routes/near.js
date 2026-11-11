@@ -2,7 +2,7 @@ import { config } from '../config/env.js';
 import { challenge,bindWallet,view,reconcile,verifyMerchantTransaction } from '../services/near.js';
 import { receiptSignature, recordMint, settlementPublicKey } from '../services/settlement.js';
 import { fail } from '../services/transaction.js';
-import { chainState, signerAvailable, treasuryBroke } from '../services/merchant-agent.js';
+import { chainState, signerAvailable, merchantBrokeFor } from '../services/merchant-agent.js';
 const text=(max=100)=>({type:'string',minLength:1,maxLength:max});
 const uuid={type:'string',format:'uuid'};
 const body=properties=>({type:'object',additionalProperties:false,required:Object.keys(properties),properties});
@@ -22,7 +22,7 @@ export async function nearRoutes(app){
    const sellable=new Map();
    for(const {o,v} of probes) if(v?.active&&v.quantity>0&&v.expires_at>Date.now()&&!sellable.has(v.token_id))sellable.set(v.token_id,{id:o,unitPrice:BigInt(v.unit_price).toString(),expiresAt:v.expires_at});
    return {network:'testnet',contractId:id,accountId,merchant:merchant.value,nativeBalance:balance.value,sellerClaim:claim.value,storage:storage.value,
-     agent,merchantBroke:!!agent&&treasuryBroke(agent.availableTreasury,[...sellable.values()].map(o=>o.unitPrice)),
+     agent,merchantBroke:merchantBrokeFor(agent,[...sellable.values()].map(o=>o.unitPrice)),
      autoMint:config.autoMint&&await signerAvailable(),
      tokens:(tokens.value||[]).map(t=>({tokenId:t.token_id,title:t.token_metadata?.title||t.token_id,order:sellable.get(t.token_id)||null}))};
  });
